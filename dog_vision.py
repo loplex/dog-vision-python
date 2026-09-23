@@ -44,6 +44,7 @@ Usage:
     uv run dog_vision.py photo.jpg       # convert a photo, writes photo.dog.png
     uv run dog_vision.py --info          # print the derived model and checks
     uv run dog_vision.py --species cat   # another dichromat
+    uv run dog_vision.py --species cat --compare dog   # two species side by side
 
 The live window (tk_window.py) lists the species on the right; keys: m = toggle
 side-by-side / simulation only, r = reset to the command-line values, s = save
@@ -480,12 +481,15 @@ def simulate(frame_bgr: np.ndarray, params: Params) -> np.ndarray:
     return apply_bgr(frame_bgr, simulation_matrix(params, mean_rgb), acuity_blur(params, frame_bgr.shape[1]))
 
 
-def convert_file(path: Path, params: Params) -> None:
+def convert_file(path: Path, params: Params, compare: str | None = None) -> None:
     image = cv2.imread(str(path), cv2.IMREAD_COLOR)
     if image is None:
         sys.exit(f"Cannot read image: {path}")
     out_path = path.with_suffix(".dog.png")
-    cv2.imwrite(str(out_path), simulate(image, params))
+    simulated = simulate(image, params)
+    if compare is not None:
+        simulated = np.hstack([simulate(image, dataclasses.replace(params, species=compare)), simulated])
+    cv2.imwrite(str(out_path), simulated)
     print(f"Wrote {out_path}")
 
 
@@ -493,17 +497,19 @@ class LiveSession:
     """Everything the live window shows and does, independent of the GUI toolkit.
 
     The camera is read on a background thread, so a GUI can poll render() from
-    its own timer without waiting for the next frame. A GUI changes params and
-    side_by_side directly, and calls reset(), save_snapshot() and close().
+    its own timer without waiting for the next frame. A GUI changes params,
+    side_by_side and compare directly, and calls reset(), save_snapshot() and close().
     """
 
-    def __init__(self, camera_index: int, initial: Params) -> None:
+    def __init__(self, camera_index: int, initial: Params, compare: str | None = None) -> None:
         self.species_names = list(SPECIES)
         self.species_labels = [species_label(name) for name in SPECIES]
         self.chroma_scales = CHROMA_SCALES
         self.initial = initial
         self.params = dataclasses.replace(initial)
         self.side_by_side = True
+        self.initial_compare = compare
+        self.compare = compare  # the species on the left instead of the original, if any
         self.error: str | None = None  # set when the camera stops delivering frames
         self._capture = cv2.VideoCapture(camera_index)
         if not self._capture.isOpened():
@@ -531,11 +537,24 @@ class LiveSession:
         if frame is None:
             return None
         simulated = simulate(frame, self.params)
-        self._last_images = np.hstack([frame, simulated]) if self.side_by_side else simulated
+        if self.side_by_side:
+            left = frame if self.compare is None else simulate(frame, dataclasses.replace(self.params, species=self.compare))
+            self._last_images = np.hstack([left, simulated])
+        else:
+            self._last_images = simulated
         return self._last_images[..., ::-1]
+
+    def caption(self) -> str:
+        """What the rendered view shows, left to right."""
+        right = species_label(self.params.species)
+        if not self.side_by_side:
+            return right
+        left = "original" if self.compare is None else species_label(self.compare)
+        return f"left: {left}    right: {right}"
 
     def reset(self) -> None:
         self.params = dataclasses.replace(self.initial)
+        self.compare = self.initial_compare
 
     def species_facts(self) -> list[tuple[str, str]]:
         """What the simulation knows about the current species, as (label, value) rows."""
@@ -545,7 +564,8 @@ class LiveSession:
         """Write the last rendered view to the working directory and return the file name."""
         if self._last_images is None:
             return None
-        name = f"dog-{self.params.species}-{time.strftime('%Y%m%d-%H%M%S')}.png"
+        shown = self.params.species if self.compare is None or not self.side_by_side else f"{self.compare}-vs-{self.params.species}"
+        name = f"dog-{shown}-{time.strftime('%Y%m%d-%H%M%S')}.png"
         cv2.imwrite(name, self._last_images)
         return name
 
@@ -575,6 +595,9 @@ def main() -> None:
         help="saturation of a dichromat's colour axis: fixed by the projection, or matched"
         " to the animal's discrimination with the RNL model (default %(default)s)",
     )
+    parser.add_argument(
+        "--compare", choices=SPECIES, help="show this species beside --species instead of the original"
+    )
     parser.add_argument("--acuity", action="store_true", help="blur to the species' visual acuity")
     parser.add_argument(
         "--fov",
@@ -588,11 +611,11 @@ def main() -> None:
     if args.info:
         print_info(params)
     elif args.image:
-        convert_file(args.image, params)
+        convert_file(args.image, params, args.compare)
     else:
         import tk_window  # the only GUI-specific line in this module
 
-        session = LiveSession(args.camera, params)
+        session = LiveSession(args.camera, params, args.compare)
         try:
             tk_window.run(session)
         finally:

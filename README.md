@@ -2,8 +2,8 @@
 
 *A camera feed or a photo, shown with the colours a dog — or another animal — can tell apart.*
 
-- [Running it](#running-it) — camera, photo, `--species`, `--adaptation`, `--strength`, `--chroma-scale`,
-  `--acuity`, `--fov`.
+- [Running it](#running-it) — camera, photo, `--species`, `--compare`, `--adaptation`, `--strength`,
+  `--chroma-scale`, `--acuity`, `--fov`.
 - [The camera window](#the-camera-window) — the species list, sliders and keys.
 - [Another GUI toolkit](#another-gui-toolkit) — `LiveSession` and `run(session)`.
 - [Species](#species) — every preset, with its cone peaks and source, and how each sees a test chart.
@@ -27,10 +27,13 @@ A distribution's Python may need its Tk package (`python3-tk` on Debian and Ubun
 uv run dog_vision.py                     # live camera 0, as a dog
 uv run dog_vision.py --camera 1          # another camera
 uv run dog_vision.py --species horse     # another animal
+uv run dog_vision.py --species cow --compare horse   # two animals side by side
 uv run dog_vision.py photo.jpg           # writes photo.dog.png next to it
 uv run dog_vision.py --adaptation 1 sunset.jpg
 ```
 
+- `--compare` puts a second species where the original would be, with the same settings, so two
+  animals can be told apart directly; with a photo, both go into the output side by side.
 - `--adaptation` (0–1) adapts the cones to the scene instead of to daylight, so a sunset-lit
   scene loses its warm cast the way it would for an eye that has been in it for a while.
 - `--strength` (0–1) blends the simulation with the original; 0 is the original.
@@ -42,8 +45,9 @@ uv run dog_vision.py --adaptation 1 sunset.jpg
 
 ## The camera window
 
-The camera image is on the left, the controls on the right.
-The image follows the window's size; the controls keep theirs.
+The images are on the left, with a line under them saying what each shows, and the controls on the
+right.
+The images follow the window's size; the controls keep theirs.
 
 | Control                         | Does                                                |
 |---------------------------------|-----------------------------------------------------|
@@ -54,7 +58,8 @@ The image follows the window's size; the controls keep theirs.
 | *Simulation strength* slider    | same as `--strength`, in percent                    |
 | *Colour saturation* choice      | same as `--chroma-scale`                            |
 | *Acuity* box and slider         | same as `--acuity` and `--fov`                      |
-| *Side by side* box, `m`         | the original beside the simulation, or not          |
+| *Side by side* box, `m`         | a second image beside the simulation, or not        |
+| *Left image* choice             | the original, or another species, as `--compare`    |
 | *Reset* button, `r`             | back to the values given on the command line        |
 | *Save snapshot* button, `s`     | saves `dog-<species>-<time>.png` in the current dir |
 | `q`, Esc                        | quits                                               |
@@ -67,8 +72,9 @@ Everything else sits in `LiveSession` in [`dog_vision.py`](dog_vision.py):
 
 - `render()` returns the current view as an RGB array, or `None` before the first frame.
   The camera is read on a thread of its own, so a GUI can call it from any timer.
-- `params` (species, adaptation, strength, chroma scale, acuity, field of view) and `side_by_side` are
-  plain attributes to set.
+- `params` (species, adaptation, strength, chroma scale, acuity, field of view), `side_by_side` and
+  `compare` (the species on the left, or `None` for the original) are plain attributes to set.
+- `caption()` says what the rendered view shows, left to right.
 - `species_names` and `chroma_scales` list the choices in display order; `species_labels` adds
   each species' kind of colour vision to its name.
 - `species_facts()` returns what is known about the current species as (label, value) rows.

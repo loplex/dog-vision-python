@@ -78,9 +78,11 @@ def run(session: LiveSession) -> None:
 
     image = tk.Label(root, background="#282828", borderwidth=0, highlightthickness=0)
     image.grid(row=0, column=0, sticky="nsew")
+    caption = ttk.Label(root, anchor="center", padding=(0, 4))
+    caption.grid(row=1, column=0, sticky="ew")
 
     side = ttk.Frame(root, padding=10)
-    side.grid(row=0, column=1, sticky="ns")
+    side.grid(row=0, column=1, rowspan=2, sticky="ns")
     side.rowconfigure(1, weight=1)
 
     ttk.Label(side, text="Species").grid(row=0, column=0, sticky="w")
@@ -147,13 +149,26 @@ def run(session: LiveSession) -> None:
     )
     field_of_view.frame.grid(row=1, column=0, sticky="ew", pady=(4, 0))
 
+    view = ttk.LabelFrame(side, text="View", padding=(8, 4))
+    view.grid(row=7, column=0, sticky="ew", pady=(10, 0))
+    view.columnconfigure(1, weight=1)
     side_by_side = tk.BooleanVar(value=session.side_by_side)
     ttk.Checkbutton(
-        side,
+        view,
         text="Side by side (m)",
         variable=side_by_side,
         command=lambda: setattr(session, "side_by_side", side_by_side.get()),
-    ).grid(row=7, column=0, sticky="w", pady=(10, 0))
+    ).grid(row=0, column=0, columnspan=2, sticky="w")
+    ttk.Label(view, text="Left image").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=(4, 0))
+    left_choices = ["original", *session.species_labels]
+    left = ttk.Combobox(view, values=left_choices, state="readonly", width=24)
+    left.grid(row=1, column=1, sticky="ew", pady=(4, 0))
+
+    def on_left(_event: tk.Event) -> None:
+        index = left.current()
+        session.compare = None if index == 0 else session.species_names[index - 1]
+
+    left.bind("<<ComboboxSelected>>", on_left)
 
     status = ttk.Label(side, text="", width=28)
 
@@ -167,6 +182,7 @@ def run(session: LiveSession) -> None:
         for field, slider in sliders.items():
             slider.set(round(getattr(session.params, field) * 100))
         acuity.set(session.params.acuity)
+        left.current(0 if session.compare is None else 1 + session.species_names.index(session.compare))
         field_of_view.set(round(session.params.field_of_view))
         chroma_scale.set(session.params.chroma_scale)
         show_facts()
@@ -214,6 +230,7 @@ def run(session: LiveSession) -> None:
             # The first frame is shown at its own size: the empty label is not laid out yet.
             photo = to_photo(rgb, image.winfo_width(), image.winfo_height()) if sized else to_photo(rgb, 0, 0)
             image.configure(image=photo)
+            caption.configure(text=session.caption())
             image.photo = photo  # Tk drops images that Python no longer references
             if not sized:
                 # The first frame sets the window to its natural size; fixing that geometry
