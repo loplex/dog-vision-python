@@ -1,0 +1,4 @@
+__pycache__/
+# Output of the tool itself: snapshots and converted photos
+dog-*.png
+*.dog.png
