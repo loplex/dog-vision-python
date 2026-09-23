@@ -162,7 +162,8 @@ image as it is, since nothing merges: `rnl` is the only way it looks different.
 - **The human is a normal trichromat** looking at the output, with the `human` row's cones and
   shares.
 - **The output is rescaled until the two counts agree.** The lightness is untouched.
-  A trichromat gets one factor per axis, chosen so that hues are rescaled but not rotated.
+  A trichromat has two axes: blue–yellow keeps its hue, as in the `fixed` scale, and changes only
+  in saturation, while the other axis takes up the rest of the difference.
   `--info` and the window show the factors for the species chosen.
 - **`human` therefore comes out exactly as the original**, and an animal shows how its
   discrimination compares with ours: below 1 it tells colours apart worse, above 1 better.

@@ -268,10 +268,10 @@ def rnl_chroma_matrix(params: Params) -> np.ndarray:
     The fixed output is x' = q_L w + U c, with w the white and U = chroma_directions.
     Both observers judge a small c by the RNL model around grey: the animal in its own
     cone coordinates, c' A c, and a human looking at the output, (U c)' H (U c).
-    Replacing U c by U K c with K' B K = A (B = U' H U) makes the two agree. Of all such
-    K this is the one that is self-adjoint in the B metric, so it rescales the axes
-    without rotating hues; for a dichromat it is the single factor sqrt(A / B), and for
-    a human it is the identity.
+    Replacing U c by U K c with K' B K = A (B = U' H U) makes the two agree. For a
+    dichromat that fixes K as the single factor sqrt(A / B); for a trichromat it leaves
+    a rotation free, spent on keeping the hue of the blue-yellow direction. For a
+    human K is the identity.
     """
     m_animal = animal_cone_matrix(params)
     n = len(m_animal)
@@ -281,8 +281,16 @@ def rnl_chroma_matrix(params: Params) -> np.ndarray:
     animal = rnl_metric(params.species, np.eye(n))[:-1, :-1]
     u = chroma_directions(m_animal)
     human = u.T @ rnl_metric("human", animal_cone_matrix(Params("human"))) @ u
-    half, inverse_half = symmetric_power(human, 0.5), symmetric_power(human, -0.5)
-    return inverse_half @ symmetric_power(half @ animal @ half, 0.5) @ inverse_half
+    if n == 2:
+        return np.sqrt(animal / human)
+    # Any K with K'BK = A is B^-1/2 Q A^1/2 for a rotation Q. Q is chosen so that K maps
+    # the blue-yellow direction onto itself: blue and yellow keep their hue, as in the
+    # fixed scale, and only their saturation changes.
+    blue_yellow = np.hstack([np.eye(n - 1), -np.ones((n - 1, 1))]) @ m_animal @ np.array([-0.5, -0.5, 1.0])
+    a, b = symmetric_power(animal, 0.5) @ blue_yellow, symmetric_power(human, 0.5) @ blue_yellow
+    angle = np.arctan2(b[1], b[0]) - np.arctan2(a[1], a[0])
+    rotation = np.array([[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]])
+    return symmetric_power(human, -0.5) @ rotation @ symmetric_power(animal, 0.5)
 
 
 def rnl_gains(params: Params) -> np.ndarray:
@@ -365,6 +373,15 @@ def print_info(params: Params) -> None:
     print("  cone-invariant   max |M_animal @ T - M_animal| =", np.abs(m_animal @ t - m_animal).max())
     if len(m_animal) == 2:
         print(f"  neutral point    {neutral_point(params):.0f} nm")
+    if len(m_animal) > 1:
+        k, u = rnl_chroma_matrix(params), chroma_directions(m_animal)
+        animal = rnl_metric(params.species, np.eye(len(m_animal)))[:-1, :-1]
+        human = u.T @ rnl_metric("human", animal_cone_matrix(Params("human"))) @ u
+        print("  rnl matches JNDs  max |K'BK - A| / |A| =", np.abs(k.T @ human @ k - animal).max() / np.abs(animal).max())
+        if len(m_animal) == 3:
+            blue_yellow = np.hstack([np.eye(2), -np.ones((2, 1))]) @ m_animal @ np.array([-0.5, -0.5, 1.0])
+            mapped = k @ blue_yellow
+            print("  rnl keeps blue    angle of K d to d =", abs(np.arctan2(*mapped[::-1]) - np.arctan2(*blue_yellow[::-1])))
     print()
     for label, value in species_facts(params.species):
         print(f"  {label + ':':15s} {value}")
