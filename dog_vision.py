@@ -8,7 +8,8 @@
 # ///
 """Simulate dichromatic dog colour vision on a live camera feed or a photo.
 
-Other dichromats and two cone monochromats are available as presets (SPECIES).
+Other dichromats, some trichromats and two cone monochromats are available as
+presets (SPECIES).
 
 Model (after Brettel, Viénot & Mollon 1997):
 
@@ -22,10 +23,11 @@ Model (after Brettel, Viénot & Mollon 1997):
 4. Each pixel is moved along n into the plane R = G. That plane contains the
    grey axis (so neutral colours stay neutral) and the blue-yellow axis (the
    conventional rendering of a dichromat's single chromatic axis). A cone
-   monochromat is mapped onto the grey axis instead.
+   monochromat is mapped onto the grey axis instead, and a trichromat maps
+   onto all of RGB: nothing merges, so without step 6 its image is unchanged.
 5. Optionally the cones adapt to the scene (von Kries gains taken from the
    image mean, "grey world"), and the result is blended with the input.
-6. The saturation of a dichromat's colour axis is either left as step 4 gives
+6. The saturation of the animal's colour axes is either left as step 4 gives
    it ("fixed"), or scaled so that one step the animal can just discriminate is
    one step a human can ("rnl"): the animal side comes from the receptor noise
    limited model of Vorobyev & Osorio (1998), the human side from CIELAB, where
@@ -61,9 +63,9 @@ import numpy as np
 # Photopigment peak wavelengths in nm.
 HUMAN_CONES = {"S": 420.7, "M": 530.3, "L": 558.9}  # Stockman & Sharpe (2000)
 
-# Cone peaks in nm: (S, L) for a dichromat, (L,) for a cone monochromat.
-# Species with an ultraviolet cone (mice, rats, birds) are left out: an RGB
-# camera records nothing of what that cone sees.
+# Cone peaks in nm: (S, M, L) for a trichromat, (S, L) for a dichromat, (L,) for a
+# cone monochromat. Species with an ultraviolet cone (mice, rats, birds) are left
+# out: an RGB camera records nothing of what that cone sees.
 SPECIES = {
     "dog": (429.0, 555.0),  # Neitz, Geist & Jacobs (1989)
     "cat": (450.0, 550.0),  # Guenther & Zrenner (1993)
@@ -80,6 +82,14 @@ SPECIES = {
     "ferret": (430.0, 558.0),  # Calderone & Jacobs (2003)
     "protanope": (HUMAN_CONES["S"], HUMAN_CONES["M"]),  # human lacking L cones
     "deuteranope": (HUMAN_CONES["S"], HUMAN_CONES["L"]),  # human lacking M cones
+    "human": tuple(HUMAN_CONES.values()),
+    # Anomalous trichromats of moderate severity: one cone shifted 10 nm towards the
+    # other, where Machado, Oliveira & Fernandes (2009) take 20 nm as dichromacy.
+    "protanomalous": (HUMAN_CONES["S"], HUMAN_CONES["M"], HUMAN_CONES["L"] - 10),
+    "deuteranomalous": (HUMAN_CONES["S"], HUMAN_CONES["M"] + 10, HUMAN_CONES["L"]),
+    "macaque": (431.0, 536.0, 565.0),  # S: Bowmaker et al. (1991); M, L: Bowmaker et al. (1978)
+    "howler-monkey": (430.0, 530.0, 562.0),  # M, L: Jacobs et al. (1996); S assumed as in macaques
+    "marmoset-female": (423.0, 543.0, 563.0),  # S: Travis et al. (1988); M/L alleles: Williams et al. (1992)
     "harbour-seal": (510.0,),  # Crognale et al. (1998)
     "bottlenose-dolphin": (524.0,),  # Fasick et al. (1998), L opsin
 }
@@ -96,10 +106,18 @@ S_CONE_FRACTION = {
     "pig": (0.05, 0.10),
     "ground-squirrel": (1 / 15, 1 / 15),  # Kryger et al. (1998): 14 M cones per S cone
     "ferret": (1 / 15, 1 / 15),  # Calderone & Jacobs (2003): 14 L cones per S cone
-    "protanope": (0.08, 0.12),  # this and the next: Curcio et al. (1991), human retina
+    "protanope": (0.08, 0.12),  # this and the next four: Curcio et al. (1991), human retina
     "deuteranope": (0.08, 0.12),
+    "human": (0.08, 0.12),
+    "protanomalous": (0.08, 0.12),
+    "deuteranomalous": (0.08, 0.12),
 }
 ASSUMED_S_CONE_FRACTION = (0.10, 0.10)  # the middle of what the measured species span
+
+# L cones per M cone for a trichromat. Humans with normal colour vision range from
+# about twice as many L as M cones to the reverse (Roorda & Williams 1999), so the
+# RNL scale takes 1:1 for every trichromat and calls it assumed.
+ASSUMED_L_TO_M = 1.0
 
 # Receptor noise of the L cone as a Weber fraction. It has been measured for almost
 # no mammal, so every species gets the value the literature uses when it is unknown.
@@ -121,9 +139,11 @@ class Params:
         return SPECIES[self.species]
 
 
-# Output subspace per number of cone types. For two: the plane R = G, whose
-# columns are the grey-yellow and blue directions. For one: the grey axis.
+# Output subspace per number of cone types. For three: all of RGB. For two: the
+# plane R = G, whose columns are the grey-yellow and blue directions. For one:
+# the grey axis.
 OUTPUT_BASIS = {
+    3: np.eye(3),
     2: np.array([[1.0, 0.0], [1.0, 0.0], [0.0, 1.0]]),
     1: np.ones((3, 1)),
 }
@@ -186,10 +206,14 @@ def grey_world_gains(m_animal: np.ndarray, mean_rgb: np.ndarray, adaptation: flo
     return (mean_cones.mean() / mean_cones) ** adaptation
 
 
-def chroma_direction(m_animal: np.ndarray) -> np.ndarray:
-    """The output colour u that raises a dichromat's S excitation by one and leaves L alone."""
-    basis = OUTPUT_BASIS[2]
-    return basis @ np.linalg.solve(m_animal @ basis, np.array([1.0, 0.0]))
+def chroma_directions(m_animal: np.ndarray) -> np.ndarray:
+    """Columns: output colours that raise one non-L cone's excitation by one, leaving the rest.
+
+    One column for a dichromat (S), two for a trichromat (S, M), none for a monochromat.
+    """
+    basis = OUTPUT_BASIS[len(m_animal)]
+    units = np.eye(len(m_animal))[:, :-1]
+    return basis @ np.linalg.solve(m_animal @ basis, units)
 
 
 def srgb_linear_to_lab(rgb: np.ndarray) -> np.ndarray:
@@ -206,25 +230,54 @@ def s_cone_fraction(species: str) -> tuple[float, bool]:
     return (low + high) / 2, species in S_CONE_FRACTION
 
 
-def rnl_chroma_gain(params: Params) -> float:
-    """Factor on the fixed chroma that makes one animal JND one human JND, around mid grey.
+def cone_shares(species: str) -> np.ndarray:
+    """Relative abundance of each cone class, short to long, summing to one."""
+    fraction, _ = s_cone_fraction(species)
+    if len(SPECIES[species]) == 2:
+        return np.array([fraction, 1 - fraction])
+    return np.array([fraction, (1 - fraction) / (1 + ASSUMED_L_TO_M), (1 - fraction) * ASSUMED_L_TO_M / (1 + ASSUMED_L_TO_M)])
 
-    Animal: a colour g w + d u (w = white, u = chroma_direction) changes only the S cone,
-    by the log contrast d / g, so its RNL distance from grey is d / (g sqrt(e_S^2 + e_L^2)),
-    with e_L = WEBER_FRACTION and e_S = e_L sqrt(n_L / n_S) from the cone ratio.
-    Human: the same colour lies |dLab/dd| d Delta E*ab from grey, i.e. that over
-    HUMAN_JND_DELTA_E JNDs. The gain equates the two for small d.
+
+def symmetric_power(matrix: np.ndarray, power: float) -> np.ndarray:
+    values, vectors = np.linalg.eigh(matrix)
+    return (vectors * values**power) @ vectors.T
+
+
+def rnl_chroma_matrix(params: Params) -> np.ndarray:
+    """K: how the "rnl" scale remaps the chromatic coordinates c = (q_i - q_L) of the fixed output.
+
+    The fixed output is x' = q_L w + U c, with w the white and U = chroma_directions.
+    Around mid grey g, both observers see a small c as a distance in JNDs:
+    - the animal, by the RNL model (Vorobyev & Osorio 1998): c' A c with
+      A = (P E P^T)^-1 / g^2, P taking cone log contrasts to c and E the squared noise
+      of each cone, e_i = WEBER_FRACTION / sqrt(n_i / n_max);
+    - the human, through CIELAB: (U c)' H (U c) with H = J' J / HUMAN_JND_DELTA_E^2.
+    Replacing U c by U K c with K' B K = A (B = U' H U) makes the two agree. Of all such
+    K this is the one that is self-adjoint in the B metric, so it rescales the axes
+    without rotating hues; for a dichromat it is the single factor sqrt(A / B).
     """
     m_animal = animal_cone_matrix(params)
-    if len(m_animal) != 2:
-        return 1.0  # a monochromat has no chromatic axis to scale
-    fraction, _ = s_cone_fraction(params.species)
-    e_l = WEBER_FRACTION
-    e_s = WEBER_FRACTION * np.sqrt((1 - fraction) / fraction)
-    animal_jnd_per_unit = 1 / (REFERENCE_GREY * np.hypot(e_s, e_l))
-    u, grey, step = chroma_direction(m_animal), np.full(3, REFERENCE_GREY), 1e-4
-    delta_e_per_unit = np.linalg.norm(srgb_linear_to_lab(grey + step * u) - srgb_linear_to_lab(grey - step * u)) / (2 * step)
-    return float(animal_jnd_per_unit * HUMAN_JND_DELTA_E / delta_e_per_unit)
+    n = len(m_animal)
+    if n == 1:
+        return np.zeros((0, 0))  # a monochromat has no chromatic axis to scale
+    shares = cone_shares(params.species)
+    noise = WEBER_FRACTION / np.sqrt(shares / shares.max())
+    to_chroma = np.hstack([np.eye(n - 1), -np.ones((n - 1, 1))])
+    animal = np.linalg.inv(to_chroma @ np.diag(noise**2) @ to_chroma.T) / REFERENCE_GREY**2
+    grey, step = np.full(3, REFERENCE_GREY), 1e-4
+    jacobian = np.stack(
+        [(srgb_linear_to_lab(grey + step * e) - srgb_linear_to_lab(grey - step * e)) / (2 * step) for e in np.eye(3)],
+        axis=1,
+    )
+    u = chroma_directions(m_animal)
+    human = u.T @ (jacobian.T @ jacobian / HUMAN_JND_DELTA_E**2) @ u
+    half, inverse_half = symmetric_power(human, 0.5), symmetric_power(human, -0.5)
+    return inverse_half @ symmetric_power(half @ animal @ half, 0.5) @ inverse_half
+
+
+def rnl_gains(params: Params) -> np.ndarray:
+    """The factors the "rnl" scale applies along its principal axes, largest first."""
+    return np.sort(np.linalg.eigvals(rnl_chroma_matrix(params)).real)[::-1]
 
 
 def simulation_matrix(params: Params, mean_rgb: np.ndarray | None = None) -> np.ndarray:
@@ -233,17 +286,19 @@ def simulation_matrix(params: Params, mean_rgb: np.ndarray | None = None) -> np.
     Output colours lie in the subspace spanned by B = OUTPUT_BASIS and produce the
     (adapted) cone excitation of the input: x' = B (M_animal B)^-1 diag(gains) M_animal x.
     With unit gains this is the projection of x along the animal's confusion
-    directions onto that subspace. For a dichromat that equals
-    x' = q_L w + (q_S - q_L) u with w the white and u = chroma_direction, and the "rnl"
-    chroma scale multiplies the second term by rnl_chroma_gain.
+    directions onto that subspace (the identity for a trichromat). It equals
+    x' = q_L w + U c with w the white, U = chroma_directions and c = (q_i - q_L), and
+    the "rnl" chroma scale replaces U c by U K c with K = rnl_chroma_matrix.
     """
     m_animal = animal_cone_matrix(params)
-    basis = OUTPUT_BASIS[len(m_animal)]
-    gains = np.ones(len(m_animal)) if mean_rgb is None else grey_world_gains(m_animal, mean_rgb, params.adaptation)
+    n = len(m_animal)
+    basis = OUTPUT_BASIS[n]
+    gains = np.ones(n) if mean_rgb is None else grey_world_gains(m_animal, mean_rgb, params.adaptation)
     adapted = np.diag(gains) @ m_animal
-    if len(m_animal) == 2 and params.chroma_scale == "rnl":
-        chroma = rnl_chroma_gain(params) * np.outer(chroma_direction(m_animal), adapted[0] - adapted[1])
-        simulated = np.outer(np.ones(3), adapted[1]) + chroma
+    if n > 1 and params.chroma_scale == "rnl":
+        to_chroma = np.hstack([np.eye(n - 1), -np.ones((n - 1, 1))])
+        chroma = chroma_directions(m_animal) @ rnl_chroma_matrix(params) @ to_chroma @ adapted
+        simulated = np.outer(np.ones(3), adapted[-1]) + chroma
     else:
         simulated = basis @ np.linalg.solve(m_animal @ basis, adapted)
     return (1.0 - params.strength) * np.eye(3) + params.strength * simulated
@@ -309,11 +364,15 @@ def print_info(params: Params) -> None:
 def chroma_note(species: str) -> str:
     """One line on what the "rnl" chroma scale does for this species, and on what data."""
     params = Params(species)
-    if len(params.cones()) != 2:
+    n = len(params.cones())
+    if n == 1:
         return "no chromatic axis to scale (cone monochromat)"
     fraction, measured = s_cone_fraction(species)
-    source = "measured" if measured else "assumed"
-    return f"x{rnl_chroma_gain(params):.2f} of fixed, S cones {fraction:.0%} ({source}), Weber fraction {WEBER_FRACTION} (assumed)"
+    gains = "/".join(f"x{gain:.2f}" for gain in rnl_gains(params))
+    cones = f"S cones {fraction:.0%} ({'measured' if measured else 'assumed'})"
+    if n == 3:
+        cones += f", L:M {ASSUMED_L_TO_M:g} (assumed)"
+    return f"{gains} of fixed, {cones}, Weber fraction {WEBER_FRACTION} (assumed)"
 
 
 def mean_linear_rgb(frame_bgr: np.ndarray) -> np.ndarray:

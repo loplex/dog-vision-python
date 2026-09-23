@@ -1,6 +1,6 @@
 # dog-vision
 
-*A camera feed or a photo, shown with the colours a dog — or one of 16 other animals — can tell apart.*
+*A camera feed or a photo, shown with the colours a dog — or another animal — can tell apart.*
 
 - [Running it](#running-it) — camera, photo, `--species`, `--adaptation`, `--strength`, `--chroma-scale`.
 - [The camera window](#the-camera-window) — the species list, sliders and keys.
@@ -72,33 +72,52 @@ A window in another toolkit is a module with the same `run(session)` function; `
 ## Species
 
 Peaks are the wavelengths of maximum cone sensitivity as measured in each source.
-A dash marks a cone monochromat, which has no S cone and sees only shades of grey.
+A dichromat's longer cone is listed under L whatever it is called elsewhere, and a cone monochromat
+has only that one, so it sees shades of grey.
 The S-cone share is used only by the [`rnl` colour saturation](#colour-saturation); where a
 source reports a range across the retina, the middle of it is used, and a star marks a species
 with no measurement found, which gets the assumed 10 %.
 
-| `--species`          | S cone [nm] | M/L cone [nm] | Peaks from                     | S cones [%] | Share from              |
-|----------------------|-------------|---------------|--------------------------------|-------------|-------------------------|
-| `dog`                | 429         | 555           | Neitz, Geist & Jacobs 1989     | 10–18       | Mowat et al. 2008       |
-| `cat`                | 450         | 550           | Guenther & Zrenner 1993        | 10–20       | Linberg et al. 2001     |
-| `horse`              | 428         | 539           | Carroll et al. 2001            | 10–25       | Sandmann et al. 1996    |
-| `cow`                | 451.3       | 555.3         | Jacobs, Deegan & Neitz 1998    | 5–10        | Schiviz et al. 2008     |
-| `sheep`              | 445.3       | 552.2         | Jacobs, Deegan & Neitz 1998    | 5–10        | Schiviz et al. 2008     |
-| `goat`               | 443.3       | 552.5         | Jacobs, Deegan & Neitz 1998    | 10 *        | assumed                 |
-| `pig`                | 440.7       | 556.7         | Jacobs, Deegan & Neitz 1998    | 5–10        | Schiviz et al. 2008     |
-| `fallow-deer`        | 453.6       | 542.2         | Jacobs, Deegan & Neitz 1998    | 10 *        | assumed                 |
-| `white-tailed-deer`  | 456         | 536.8         | Jacobs, Deegan & Neitz 1998    | 10 *        | assumed                 |
-| `guinea-pig`         | 429         | 529           | Jacobs & Deegan 1994           | 10 *        | assumed                 |
-| `tree-squirrel`      | 444         | 543           | Blakeslee, Jacobs & Neitz 1988 | 10 *        | assumed                 |
-| `ground-squirrel`    | 436.7       | 518.9         | Jacobs, Neitz & Crognale 1985  | 7           | Kryger et al. 1998      |
-| `ferret`             | 430         | 558           | Calderone & Jacobs 2003        | 7           | Calderone & Jacobs 2003 |
-| `protanope`          | 420.7       | 530.3         | Stockman & Sharpe 2000         | 8–12        | Curcio et al. 1991      |
-| `deuteranope`        | 420.7       | 558.9         | Stockman & Sharpe 2000         | 8–12        | Curcio et al. 1991      |
-| `harbour-seal`       | –           | 510           | Crognale et al. 1998           | –           |                         |
-| `bottlenose-dolphin` | –           | 524           | Fasick et al. 1998             | –           |                         |
+| `--species`          | S [nm] | M [nm] | L [nm] | Peaks from                     | S cones [%] | Share from              |
+|----------------------|--------|--------|--------|--------------------------------|-------------|-------------------------|
+| `dog`                | 429    | –      | 555    | Neitz, Geist & Jacobs 1989     | 10–18       | Mowat et al. 2008       |
+| `cat`                | 450    | –      | 550    | Guenther & Zrenner 1993        | 10–20       | Linberg et al. 2001     |
+| `horse`              | 428    | –      | 539    | Carroll et al. 2001            | 10–25       | Sandmann et al. 1996    |
+| `cow`                | 451.3  | –      | 555.3  | Jacobs, Deegan & Neitz 1998    | 5–10        | Schiviz et al. 2008     |
+| `sheep`              | 445.3  | –      | 552.2  | Jacobs, Deegan & Neitz 1998    | 5–10        | Schiviz et al. 2008     |
+| `goat`               | 443.3  | –      | 552.5  | Jacobs, Deegan & Neitz 1998    | 10 *        | assumed                 |
+| `pig`                | 440.7  | –      | 556.7  | Jacobs, Deegan & Neitz 1998    | 5–10        | Schiviz et al. 2008     |
+| `fallow-deer`        | 453.6  | –      | 542.2  | Jacobs, Deegan & Neitz 1998    | 10 *        | assumed                 |
+| `white-tailed-deer`  | 456    | –      | 536.8  | Jacobs, Deegan & Neitz 1998    | 10 *        | assumed                 |
+| `guinea-pig`         | 429    | –      | 529    | Jacobs & Deegan 1994           | 10 *        | assumed                 |
+| `tree-squirrel`      | 444    | –      | 543    | Blakeslee, Jacobs & Neitz 1988 | 10 *        | assumed                 |
+| `ground-squirrel`    | 436.7  | –      | 518.9  | Jacobs, Neitz & Crognale 1985  | 7           | Kryger et al. 1998      |
+| `ferret`             | 430    | –      | 558    | Calderone & Jacobs 2003        | 7           | Calderone & Jacobs 2003 |
+| `protanope`          | 420.7  | –      | 530.3  | Stockman & Sharpe 2000         | 8–12        | Curcio et al. 1991      |
+| `deuteranope`        | 420.7  | –      | 558.9  | Stockman & Sharpe 2000         | 8–12        | Curcio et al. 1991      |
+| `human`              | 420.7  | 530.3  | 558.9  | Stockman & Sharpe 2000         | 8–12        | Curcio et al. 1991      |
+| `protanomalous`      | 420.7  | 530.3  | 548.9  | L shifted 10 nm, see text      | 8–12        | Curcio et al. 1991      |
+| `deuteranomalous`    | 420.7  | 540.3  | 558.9  | M shifted 10 nm, see text      | 8–12        | Curcio et al. 1991      |
+| `macaque`            | 431    | 536    | 565    | Bowmaker et al. 1978, 1991     | 10 *        | assumed                 |
+| `howler-monkey`      | 430    | 530    | 562    | Jacobs et al. 1996, S assumed  | 10 *        | assumed                 |
+| `marmoset-female`    | 423    | 543    | 563    | Travis 1988, Williams 1992     | 10 *        | assumed                 |
+| `harbour-seal`       | –      | –      | 510    | Crognale et al. 1998           | –           |                         |
+| `bottlenose-dolphin` | –      | –      | 524    | Fasick et al. 1998             | –           |                         |
 
-`protanope` and `deuteranope` are humans lacking the L or the M cone; their values are the human
-pigment peaks.
+Notes on the human and primate rows:
+
+- `protanope` and `deuteranope` are humans lacking the L or the M cone; their values are the human
+  pigment peaks.
+- `protanomalous` and `deuteranomalous` are anomalous trichromats of moderate severity: the L or the
+  M cone is shifted 10 nm towards the other.
+  Machado, Oliveira & Fernandes (2009) model severity the same way, with a 20 nm shift standing for
+  dichromacy.
+- `human` is normal colour vision. Its `fixed` image is the original, and its `rnl` image is a check
+  on the RNL scale: see [the caveat](#caveat-the-absolute-level-rests-on-an-assumed-noise).
+- `marmoset-female` is a female with the 543 nm and 563 nm variants of the M/L pigment; males, and
+  females with two copies of one variant, are dichromats.
+- Every trichromat is given one L cone per M cone. Humans with normal colour vision range from about
+  twice as many L as M cones to the reverse (Roorda & Williams 1999).
 
 ## How it works
 
@@ -125,10 +144,13 @@ The docstring of [`dog_vision.py`](dog_vision.py) states it as formulas.
 Step 4 fixes which colours merge, but not how saturated the rest look: the plane has no natural
 scale. `--chroma-scale` picks one of two:
 
-| Scale   | Saturation of a dichromat's blue–yellow axis                                   |
+| Scale   | Saturation of the animal's colour axes                                         |
 |---------|--------------------------------------------------------------------------------|
 | `fixed` | as the projection leaves it; the default, and what earlier versions always did |
 | `rnl`   | scaled so that a step the animal can just tell apart is one a human can        |
+
+A dichromat has one colour axis, blue–yellow. A trichromat has two, and for it `fixed` leaves the
+image as it is, since nothing merges: `rnl` is the only way it looks different.
 
 `rnl` matches two models of a just-noticeable difference (JND) around a mid grey:
 
@@ -136,7 +158,8 @@ scale. `--chroma-scale` picks one of two:
   It needs each cone's noise, derived from a Weber fraction and the ratio of S to L cones.
 - **The human's** comes from CIELAB, where one JND is about ΔE\*ab 2.3 (Mahy et al. 1994).
 - The ratio of the two multiplies the chromatic part of the output; the lightness is untouched.
-  `--info` and the window show the factor for the species chosen.
+  A trichromat gets one factor per axis, chosen so that hues are rescaled but not rotated.
+  `--info` and the window show the factors for the species chosen.
 
 ### Caveat: the absolute level rests on an assumed noise
 
@@ -146,6 +169,9 @@ scale. `--chroma-scale` picks one of two:
   The factor is inversely proportional to it, so a true value of 0.02 would make every species
   2.5 times more saturated.
   Comparisons between species are therefore firmer than any one species' level.
+- **The `human` preset shows how far off the level is.** Normal human vision matched against itself
+  should come out unchanged, with both factors at 1; `--info --species human` shows how far below 1
+  they are.
 - **Some S-cone shares are assumed**, marked with a star in the [species table](#species).
 - **RNL is a threshold model.** It is matched near grey; strongly saturated colours are
   extrapolated, and the human JND of 2.3 itself varies widely across CIELAB.
@@ -157,10 +183,9 @@ scale. `--chroma-scale` picks one of two:
 
 - **Animals with an ultraviolet cone** — mice, rats, birds, bees — are left out.
   An RGB camera records nothing of what that cone sees.
-- **Trichromats** are left out too. The camera is itself trichromatic, so two colours it records
-  differently also excite a trichromat's cones differently: nothing merges.
-  What changes is how far apart the colours look, and that needs a model of colour discrimination,
-  not of cone excitation.
+- **For trichromats only the spacing of colours can change.** The camera is itself trichromatic, so
+  two colours it records differently also excite a trichromat's cones differently: nothing merges.
+  The `rnl` scale shows how far apart they look instead.
 - **Colours a camera merges** stay merged. Two surfaces that look alike to a human, and so to the
   camera, can differ for the animal.
 - **What the colours feel like** to the animal is unknowable. The simulation shows which colours
@@ -187,6 +212,10 @@ scale. `--chroma-scale` picks one of two:
 
 - Blakeslee, B., Jacobs, G. H. & Neitz, J. (1988). Spectral mechanisms in the tree squirrel retina.
   *J. Comp. Physiol. A* 162, 773–780.
+- Bowmaker, J. K. et al. (1978). The visual pigments of rods and cones in the rhesus monkey,
+  *Macaca mulatta*. *J. Physiol.*
+- Bowmaker, J. K., Astell, S., Hunt, D. M. & Mollon, J. D. (1991). Photosensitive and photostable
+  pigments in the retinae of Old World monkeys. *J. Exp. Biol.*
 - Brettel, H., Viénot, F. & Mollon, J. D. (1997). Computerized simulation of color appearance for
   dichromats. *J. Opt. Soc. Am. A* 14, 2647–2655.
 - Calderone, J. B. & Jacobs, G. H. (2003). Spectral properties and retinal distribution of ferret
@@ -210,16 +239,22 @@ scale. `--chroma-scale` picks one of two:
   in cows, goats, and sheep. *Visual Neuroscience* 15, 581–584.
 - Jacobs, G. H., Neitz, J. & Crognale, M. (1985). Spectral sensitivity of ground squirrel cones
   measured with ERG flicker photometry. *J. Comp. Physiol. A* 156, 503–509.
+- Jacobs, G. H., Neitz, M., Deegan, J. F. & Neitz, J. (1996). Trichromatic colour vision in New
+  World monkeys. *Nature* 382.
 - Kryger, Z. et al. (1998). The topography of rod and cone photoreceptors in the retina of the
   ground squirrel. *Visual Neuroscience* 15.
 - Linberg, K. A., Lewis, G. P. et al. (2001). Distribution of S- and M-cones in normal and
   experimentally detached cat retina. *J. Comp. Neurol.* 430.
+- Machado, G. M., Oliveira, M. M. & Fernandes, L. A. F. (2009). A physiologically-based model for
+  simulation of color vision deficiency. *IEEE Trans. Vis. Comput. Graph.* 15.
 - Mahy, M., Van Eycken, L. & Oosterlinck, A. (1994). Evaluation of uniform color spaces developed
   after the adoption of CIELAB and CIELUV. *Color Research & Application* 19, 105–121.
 - Mowat, F. M. et al. (2008). Topographical characterization of cone photoreceptors and the area
   centralis of the canine retina. *Molecular Vision* 14.
 - Neitz, J., Geist, T. & Jacobs, G. H. (1989). Color vision in the dog. *Visual Neuroscience* 3,
   119–125.
+- Roorda, A. & Williams, D. R. (1999). The arrangement of the three cone classes in the living
+  human eye. *Nature* 397, 520–522.
 - Sandmann, D., Boycott, B. B. & Peichl, L. (1996). Blue-cone horizontal cells in the retinae of
   horses and other Equidae. *J. Neurosci.* 16.
 - Schiviz, A. N., Ruf, T., Kuebber-Heiss, A., Schubert, C. & Ahnelt, P. K. (2008). Retinal cone
@@ -228,7 +263,11 @@ scale. `--chroma-scale` picks one of two:
 - Stockman, A. & Sharpe, L. T. (2000). The spectral sensitivities of the middle- and
   long-wavelength-sensitive cones derived from measurements in observers of known genotype.
   *Vision Research* 40, 1711–1737.
+- Travis, D. S., Bowmaker, J. K. & Mollon, J. D. (1988). Polymorphism of visual pigments in a
+  callitrichid monkey. *Vision Research* 28, 481–490.
 - Viénot, F., Brettel, H. & Mollon, J. D. (1999). Digital video colourmaps for checking the
   legibility of displays by dichromats. *Color Research & Application* 24, 243–252.
 - Vorobyev, M. & Osorio, D. (1998). Receptor noise as a determinant of colour thresholds.
   *Proc. R. Soc. B* 265, 351–358.
+- Williams, A. J. et al. (1992). The polymorphic photopigments of the marmoset: spectral tuning and
+  genetic basis. *EMBO J.* 11.

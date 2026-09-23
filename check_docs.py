@@ -31,8 +31,11 @@ def without_code_blocks(text: str) -> str:
 
 
 def check_species_table(readme: str) -> list[str]:
-    rows = re.findall(r"^\| `([\w-]+)` +\| ([\d.–]+) +\| ([\d.]+) +\|[^|]+\| ([\d–]+ ?\*?|–) +\|", readme, flags=re.M)
-    documented = {name: ((() if s == "–" else (float(s),)) + (float(l),), share.strip()) for name, s, l, share in rows}
+    cell = r" ([\d.–]+) +\|"
+    rows = re.findall(r"^\| `([\w-]+)` +\|" + cell * 3 + r"[^|]+\| ([\d–]+ ?\*?|–) +\|", readme, flags=re.M)
+    documented = {
+        name: (tuple(float(v) for v in (s, m, l) if v != "–"), share.strip()) for name, s, m, l, share in rows
+    }
     errors = []
     if list(documented) != list(dv.SPECIES):
         errors.append(f"species table lists {list(documented)}, SPECIES has {list(dv.SPECIES)}")
@@ -49,7 +52,7 @@ def check_species_table(readme: str) -> list[str]:
 
 def expected_share(name: str) -> str:
     """The S-cone share cell the table should show for a species, in percent."""
-    if len(dv.SPECIES[name]) != 2:
+    if len(dv.SPECIES[name]) == 1:
         return "–"
     low, high = dv.S_CONE_FRACTION.get(name, dv.ASSUMED_S_CONE_FRACTION)
     cell = f"{low * 100:.0f}" if round(low * 100) == round(high * 100) else f"{low * 100:.0f}–{high * 100:.0f}"
