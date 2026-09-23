@@ -4,33 +4,39 @@
 # ///
 """Simulate dichromatic dog colour vision on a live camera feed or a photo.
 
+Other dichromats and two cone monochromats are available as presets (SPECIES).
+
 Model (after Brettel, Viénot & Mollon 1997):
 
 1. Every cone is modelled with the Govardovskii et al. (2000) A1 visual-pigment
    template, parametrised only by its peak wavelength.
 2. The display is modelled as three Gaussian primaries (typical sRGB LCD),
    scaled so that RGB (1,1,1) excites the human cones like D65 daylight.
-3. M_dog (2x3) maps linear RGB to the dog's S and L cone excitations. Its
-   one-dimensional null space n is the direction along which colours differ
-   only in ways the dog cannot see.
+3. M_animal (2x3 for a dichromat) maps linear RGB to the animal's S and L cone
+   excitations. Its one-dimensional null space n is the direction along which
+   colours differ only in ways the animal cannot see.
 4. Each pixel is moved along n into the plane R = G. That plane contains the
    grey axis (so neutral colours stay neutral) and the blue-yellow axis (the
-   conventional rendering of a dichromat's single chromatic axis).
+   conventional rendering of a dichromat's single chromatic axis). A cone
+   monochromat is mapped onto the grey axis instead.
 
-The whole transform collapses into one rank-2 3x3 matrix on linear RGB, and by
-construction the dog excitation of every output pixel equals that of the input.
+The whole transform collapses into one 3x3 matrix on linear RGB. Its rank
+equals the number of cone types, and the animal's cone excitation of every
+output pixel equals that of the input.
 
 Usage:
     uv run dog_vision.py                 # live camera 0
     uv run dog_vision.py --camera 1      # another camera
     uv run dog_vision.py photo.jpg       # convert a photo, writes photo.dog.png
     uv run dog_vision.py --info          # print the derived model and checks
+    uv run dog_vision.py --species cat   # another dichromat
 
-Keys in the live window: m = toggle side-by-side / dog only, s = save
+Keys in the live window: m = toggle side-by-side / simulation only, s = save
 snapshot, q or Esc = quit.
 """
 
 import argparse
+import dataclasses
 import os
 import subprocess
 import sys
@@ -42,7 +48,45 @@ import numpy as np
 
 # Photopigment peak wavelengths in nm.
 HUMAN_CONES = {"S": 420.7, "M": 530.3, "L": 558.9}  # Stockman & Sharpe (2000)
-DOG_CONES = {"S": 429.0, "L": 555.0}  # Neitz, Geist & Jacobs (1989)
+
+# Cone peaks in nm: (S, L) for a dichromat, (L,) for a cone monochromat.
+# Species with an ultraviolet cone (mice, rats, birds) are left out: an RGB
+# camera records nothing of what that cone sees.
+SPECIES = {
+    "dog": (429.0, 555.0),  # Neitz, Geist & Jacobs (1989)
+    "cat": (450.0, 550.0),  # Guenther & Zrenner (1993)
+    "horse": (428.0, 539.0),  # Carroll et al. (2001)
+    "cow": (451.3, 555.3),  # this and the next five: Jacobs, Deegan & Neitz (1998), table 1
+    "sheep": (445.3, 552.2),
+    "goat": (443.3, 552.5),
+    "pig": (440.7, 556.7),
+    "fallow-deer": (453.6, 542.2),
+    "white-tailed-deer": (456.0, 536.8),
+    "guinea-pig": (429.0, 529.0),  # Jacobs & Deegan (1994)
+    "tree-squirrel": (444.0, 543.0),  # Blakeslee, Jacobs & Neitz (1988)
+    "ground-squirrel": (436.7, 518.9),  # Jacobs, Neitz & Crognale (1985), California species
+    "ferret": (430.0, 558.0),  # Calderone & Jacobs (2003)
+    "protanope": (HUMAN_CONES["S"], HUMAN_CONES["M"]),  # human lacking L cones
+    "deuteranope": (HUMAN_CONES["S"], HUMAN_CONES["L"]),  # human lacking M cones
+    "harbour-seal": (510.0,),  # Crognale et al. (1998)
+    "bottlenose-dolphin": (524.0,),  # Fasick et al. (1998), L opsin
+}
+
+
+@dataclasses.dataclass
+class Params:
+    species: str = "dog"
+
+    def cones(self) -> tuple[float, ...]:
+        return SPECIES[self.species]
+
+
+# Output subspace per number of cone types. For two: the plane R = G, whose
+# columns are the grey-yellow and blue directions. For one: the grey axis.
+OUTPUT_BASIS = {
+    2: np.array([[1.0, 0.0], [1.0, 0.0], [0.0, 1.0]]),
+    1: np.ones((3, 1)),
+}
 
 # Gaussian approximation of a typical sRGB LCD: (peak nm, sigma nm).
 DISPLAY_PRIMARIES = {"R": (610.0, 20.0), "G": (540.0, 18.0), "B": (450.0, 10.0)}
@@ -73,9 +117,9 @@ def planck(temperature: float, wl: np.ndarray = WAVELENGTHS) -> np.ndarray:
     return 1.0 / (wl_m**5 * (np.exp(h * c / (wl_m * k * temperature)) - 1.0))
 
 
-def cone_matrix(cone_peaks: dict[str, float], primaries: np.ndarray) -> np.ndarray:
+def cone_matrix(cone_peaks: tuple[float, ...], primaries: np.ndarray) -> np.ndarray:
     """Cone excitations (rows) produced by each display primary (columns)."""
-    sens = np.stack([govardovskii_a1(p) for p in cone_peaks.values()])
+    sens = np.stack([govardovskii_a1(p) for p in cone_peaks])
     return sens @ primaries.T
 
 
@@ -84,27 +128,35 @@ def display_primaries() -> np.ndarray:
     raw = np.stack(
         [np.exp(-0.5 * ((WAVELENGTHS - peak) / sigma) ** 2) for peak, sigma in DISPLAY_PRIMARIES.values()]
     )
-    human = cone_matrix(HUMAN_CONES, raw)
+    human = cone_matrix(tuple(HUMAN_CONES.values()), raw)
     human_d65 = np.stack([govardovskii_a1(p) for p in HUMAN_CONES.values()]) @ planck(6504.0)
     scales = np.linalg.solve(human, human_d65)
     return raw * scales[:, None]
 
 
-def dog_simulation_matrix() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Return (T, M_dog, n): the 3x3 linear-RGB transform, dog cone matrix and its null vector."""
-    m_dog = cone_matrix(DOG_CONES, display_primaries())
-    m_dog /= m_dog.sum(axis=1, keepdims=True)  # von Kries: white excites each cone to 1
-    n = np.cross(m_dog[0], m_dog[1])  # spans the null space of a 2x3 matrix
-    c = np.array([1.0, -1.0, 0.0])  # normal of the target plane R = G
-    t = np.eye(3) - np.outer(n, c) / (c @ n)
-    return t, m_dog, n
+def animal_cone_matrix(params: Params) -> np.ndarray:
+    """M_animal (cones x 3): cone excitations from linear RGB, white mapping to all ones."""
+    m_animal = cone_matrix(params.cones(), display_primaries())
+    return m_animal / m_animal.sum(axis=1, keepdims=True)  # von Kries adaptation to daylight
 
 
-def neutral_point() -> float:
-    """Wavelength of monochromatic light the dog sees with the same S/L ratio as white."""
-    dog_sens = np.stack([govardovskii_a1(p) for p in DOG_CONES.values()])
-    white = cone_matrix(DOG_CONES, display_primaries()) @ np.ones(3)
-    ratio = dog_sens[0] / dog_sens[1] - white[0] / white[1]
+def simulation_matrix(params: Params) -> np.ndarray:
+    """The 3x3 linear-RGB transform for the given parameters.
+
+    Output colours lie in the subspace spanned by B = OUTPUT_BASIS and produce the
+    cone excitation of the input: x' = B (M_animal B)^-1 M_animal x. This is the
+    projection of x along the animal's confusion directions onto that subspace.
+    """
+    m_animal = animal_cone_matrix(params)
+    basis = OUTPUT_BASIS[len(m_animal)]
+    return basis @ np.linalg.solve(m_animal @ basis, m_animal)
+
+
+def neutral_point(params: Params) -> float:
+    """Wavelength of monochromatic light a dichromat sees with the same S/L ratio as white."""
+    sens = np.stack([govardovskii_a1(p) for p in params.cones()])
+    white = cone_matrix(params.cones(), display_primaries()) @ np.ones(3)
+    ratio = sens[0] / sens[1] - white[0] / white[1]
     visible = (WAVELENGTHS > 420) & (WAVELENGTHS < 600)
     idx = np.where(visible[:-1] & (np.sign(ratio[:-1]) != np.sign(ratio[1:])))[0][0]
     return float(WAVELENGTHS[idx])
@@ -134,27 +186,38 @@ def apply_bgr(frame_bgr: np.ndarray, t_rgb: np.ndarray) -> np.ndarray:
     return _ENCODE[(out * (_ENCODE_STEPS - 1)).astype(np.int32)]
 
 
-def print_info() -> None:
-    t, m_dog, n = dog_simulation_matrix()
+def print_info(params: Params) -> None:
+    m_animal = animal_cone_matrix(params)
+    t = simulation_matrix(params)
     np.set_printoptions(precision=4, suppress=True)
-    print("Dog cone matrix M_dog (rows S, L; columns linear R, G, B):")
-    print(m_dog)
-    print("\nConfusion direction n (normalised):", n / np.abs(n).max())
+    print(f"Species {params.species}, cone peaks {params.cones()} nm")
+    print("\nCone matrix M_animal (rows: cones, short to long; columns: linear R, G, B):")
+    print(m_animal)
+    if len(m_animal) == 2:
+        n = np.cross(m_animal[0], m_animal[1])  # spans the null space of a 2x3 matrix
+        print("\nConfusion direction n (normalised):", n / np.abs(n).max())
     print("\nSimulation matrix T (linear RGB):")
     print(t)
     print("\nChecks:")
     print("  grey preserved   T @ (1,1,1) =", t @ np.ones(3))
-    print("  dog-invariant    max |M_dog @ T - M_dog| =", np.abs(m_dog @ t - m_dog).max())
-    print(f"  neutral point    {neutral_point():.0f} nm (measured in dogs: ~480 nm)")
-    print("\nFor comparison, human deuteranope (Viénot et al. 1999): R' = G' = 0.293 R + 0.707 G")
+    print("  cone-invariant   max |M_animal @ T - M_animal| =", np.abs(m_animal @ t - m_animal).max())
+    if len(m_animal) == 2:
+        print(f"  neutral point    {neutral_point(params):.0f} nm")
+    print("\nReference values: the dog's neutral point was measured at about 480 nm")
+    print("(Neitz, Geist & Jacobs 1989); a human deuteranope is R' = G' = 0.293 R + 0.707 G")
+    print("(Viénot, Brettel & Mollon 1999).")
 
 
-def convert_file(path: Path, t: np.ndarray) -> None:
+def simulate(frame_bgr: np.ndarray, params: Params) -> np.ndarray:
+    return apply_bgr(frame_bgr, simulation_matrix(params))
+
+
+def convert_file(path: Path, params: Params) -> None:
     image = cv2.imread(str(path), cv2.IMREAD_COLOR)
     if image is None:
         sys.exit(f"Cannot read image: {path}")
     out_path = path.with_suffix(".dog.png")
-    cv2.imwrite(str(out_path), apply_bgr(image, t))
+    cv2.imwrite(str(out_path), simulate(image, params))
     print(f"Wrote {out_path}")
 
 
@@ -175,7 +238,7 @@ def use_system_fonts() -> None:
         os.environ["QT_QPA_FONTDIR"] = str(Path(font).parent)
 
 
-def run_camera(index: int, t: np.ndarray) -> None:
+def run_camera(index: int, params: Params) -> None:
     cap = cv2.VideoCapture(index)
     if not cap.isOpened():
         sys.exit(f"Cannot open camera {index}")
@@ -188,8 +251,8 @@ def run_camera(index: int, t: np.ndarray) -> None:
             ok, frame = cap.read()
             if not ok:
                 sys.exit("Camera stopped delivering frames")
-            dog = apply_bgr(frame, t)
-            view = np.hstack([frame, dog]) if side_by_side else dog
+            simulated = simulate(frame, params)
+            view = np.hstack([frame, simulated]) if side_by_side else simulated
             cv2.imshow(window, view)
             key = cv2.waitKey(1) & 0xFF
             if key in (ord("q"), 27) or cv2.getWindowProperty(window, cv2.WND_PROP_VISIBLE) < 1:
@@ -210,16 +273,17 @@ def main() -> None:
     parser.add_argument("image", nargs="?", type=Path, help="photo to convert instead of using the camera")
     parser.add_argument("--camera", type=int, default=0, help="camera index (default 0)")
     parser.add_argument("--info", action="store_true", help="print the derived model and exit")
+    defaults = Params()
+    parser.add_argument("--species", choices=SPECIES, default=defaults.species, help="animal to simulate (default %(default)s)")
     args = parser.parse_args()
+    params = Params(args.species)
 
     if args.info:
-        print_info()
-        return
-    t, _, _ = dog_simulation_matrix()
-    if args.image:
-        convert_file(args.image, t)
+        print_info(params)
+    elif args.image:
+        convert_file(args.image, params)
     else:
-        run_camera(args.camera, t)
+        run_camera(args.camera, params)
 
 
 if __name__ == "__main__":
