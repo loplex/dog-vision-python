@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["numpy", "opencv-python"]
+# dependencies = ["numpy", "opencv-python-headless"]
 # ///
 """Simulate dichromatic dog colour vision on a live camera feed or a photo.
 
@@ -33,16 +33,16 @@ Usage:
     uv run dog_vision.py --info          # print the derived model and checks
     uv run dog_vision.py --species cat   # another dichromat
 
-In the live window, click a species in the list on the right or use the up
-and down arrow keys. Other keys: m = toggle side-by-side / simulation only,
-r = reset to the command-line values, s = save snapshot, q or Esc = quit.
+The live window (tk_window.py) lists the species on the right; keys: m = toggle
+side-by-side / simulation only, r = reset to the command-line values, s = save
+snapshot, q or Esc = quit. The window only drives LiveSession, so another GUI
+toolkit needs nothing but a module with the same run(session) function.
 """
 
 import argparse
 import dataclasses
-import os
-import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -241,144 +241,64 @@ def convert_file(path: Path, params: Params) -> None:
     print(f"Wrote {out_path}")
 
 
-def use_system_fonts() -> None:
-    """Point Qt at a system font directory.
+class LiveSession:
+    """Everything the live window shows and does, independent of the GUI toolkit.
 
-    The opencv-python wheel bundles Qt without any fonts, and importing cv2 sets
-    QT_QPA_FONTDIR to the missing cv2/qt/fonts directory, so toolbar tooltips,
-    trackbar labels and the status bar render blank. An existing directory is kept.
+    The camera is read on a background thread, so a GUI can poll render() from
+    its own timer without waiting for the next frame. A GUI changes params and
+    side_by_side directly, and calls reset(), save_snapshot() and close().
     """
-    if Path(os.environ.get("QT_QPA_FONTDIR", "")).is_dir():
-        return
-    try:
-        font = subprocess.run(["fc-match", "-f", "%{file}", "sans"], capture_output=True, text=True).stdout
-    except FileNotFoundError:  # no fontconfig, e.g. on Windows
-        return
-    if font and Path(font).is_file():
-        os.environ["QT_QPA_FONTDIR"] = str(Path(font).parent)
 
+    def __init__(self, camera_index: int, initial: Params) -> None:
+        self.species_names = list(SPECIES)
+        self.initial = initial
+        self.params = dataclasses.replace(initial)
+        self.side_by_side = True
+        self.error: str | None = None  # set when the camera stops delivering frames
+        self._capture = cv2.VideoCapture(camera_index)
+        if not self._capture.isOpened():
+            sys.exit(f"Cannot open camera {camera_index}")
+        self._frame: np.ndarray | None = None
+        self._last_images: np.ndarray | None = None
+        self._lock = threading.Lock()
+        self._running = True
+        self._thread = threading.Thread(target=self._read_frames, daemon=True)
+        self._thread.start()
 
-PERCENT_SLIDERS = {"Adaptation to scene [%]": "adaptation", "Simulation strength [%]": "strength"}
-
-# Arrow key codes returned by cv2.waitKeyEx: X11 keysyms (Linux) and Win32 codes.
-UP_KEYS = {65362, 2490368}
-DOWN_KEYS = {65364, 2621440}
-
-PANEL_WIDTH = 230
-PANEL_MARGIN = 10
-
-
-def create_sliders(window: str, params: Params) -> None:
-    for label in PERCENT_SLIDERS:
-        cv2.createTrackbar(label, window, 0, 100, lambda _: None)
-    set_sliders(window, params)
-
-
-def set_sliders(window: str, params: Params) -> None:
-    for label, field in PERCENT_SLIDERS.items():
-        cv2.setTrackbarPos(label, window, round(getattr(params, field) * 100))
-
-
-def read_sliders(window: str, species: str) -> Params:
-    percents = {field: cv2.getTrackbarPos(label, window) / 100 for label, field in PERCENT_SLIDERS.items()}
-    return Params(species, **percents)
-
-
-def panel_row_height(height: int) -> int:
-    return max(12, min(26, (height - 2 * PANEL_MARGIN) // len(SPECIES)))
-
-
-def species_at(y: int, height: int) -> str | None:
-    """The species listed at row y of the panel, or None between or below the rows."""
-    row = (y - PANEL_MARGIN) // panel_row_height(height)
-    return list(SPECIES)[row] if y >= PANEL_MARGIN and row < len(SPECIES) else None
-
-
-def draw_species_panel(height: int, selected: str) -> np.ndarray:
-    panel = np.full((height, PANEL_WIDTH, 3), 40, dtype=np.uint8)
-    row_height = panel_row_height(height)
-    for i, name in enumerate(SPECIES):
-        top = PANEL_MARGIN + i * row_height
-        if name == selected:
-            cv2.rectangle(panel, (4, top), (PANEL_WIDTH - 5, top + row_height - 2), (110, 110, 110), -1)
-        colour = (255, 255, 255) if name == selected else (190, 190, 190)
-        baseline = top + round(row_height * 0.72)
-        cv2.putText(panel, name, (12, baseline), cv2.FONT_HERSHEY_SIMPLEX, row_height / 45, colour, 1, cv2.LINE_AA)
-    return panel
-
-
-def compose_view(images: np.ndarray, species: str, size: tuple[int, int]) -> np.ndarray:
-    """Lay the images and the species panel out at exactly the window's pixel size.
-
-    Qt scales whatever it is given with nearest-neighbour sampling, which makes text
-    ragged, so the images are resized here with smoothing and the panel text is drawn
-    at its final resolution.
-    """
-    width, height = size
-    if width <= PANEL_WIDTH or height <= 0:  # window not laid out yet
-        width, height = images.shape[1] + PANEL_WIDTH, images.shape[0]
-    view = np.full((height, width, 3), 40, dtype=np.uint8)
-    scale = min((width - PANEL_WIDTH) / images.shape[1], height / images.shape[0])
-    fitted_size = (max(1, round(images.shape[1] * scale)), max(1, round(images.shape[0] * scale)))
-    fitted = cv2.resize(images, fitted_size, interpolation=cv2.INTER_AREA if scale < 1 else cv2.INTER_LINEAR)
-    top = (height - fitted.shape[0]) // 2
-    view[top : top + fitted.shape[0], : fitted.shape[1]] = fitted
-    view[:, width - PANEL_WIDTH :] = draw_species_panel(height, species)
-    return view
-
-
-def run_camera(index: int, initial: Params) -> None:
-    cap = cv2.VideoCapture(index)
-    if not cap.isOpened():
-        sys.exit(f"Cannot open camera {index}")
-    window = "Dog vision (m = mode, r = reset, s = snapshot, q = quit)"
-    use_system_fonts()
-    # FREERATIO: Qt must not letterbox, so the view's size is the window's size.
-    cv2.namedWindow(window, cv2.WINDOW_NORMAL | cv2.WINDOW_FREERATIO)
-    create_sliders(window, initial)
-    names = list(SPECIES)
-    # Written by the mouse callback; panel_x is where the species panel starts in the view.
-    state = {"species": initial.species, "panel_x": 0, "height": 1}
-
-    def on_mouse(event: int, x: int, y: int, _flags: int, _param: object) -> None:
-        if event == cv2.EVENT_LBUTTONDOWN and x >= state["panel_x"]:
-            state["species"] = species_at(y, state["height"]) or state["species"]
-
-    cv2.setMouseCallback(window, on_mouse)
-    side_by_side = True
-    first_frame = True
-    try:
-        while True:
-            ok, frame = cap.read()
+    def _read_frames(self) -> None:
+        while self._running:
+            ok, frame = self._capture.read()
             if not ok:
-                sys.exit("Camera stopped delivering frames")
-            params = read_sliders(window, state["species"])
-            simulated = simulate(frame, params)
-            images = np.hstack([frame, simulated]) if side_by_side else simulated
-            if first_frame:  # WINDOW_NORMAL opens small; start at the image's own size
-                cv2.resizeWindow(window, images.shape[1] + PANEL_WIDTH, images.shape[0])
-                first_frame = False
-            view = compose_view(images, params.species, cv2.getWindowImageRect(window)[2:])
-            state["panel_x"], state["height"] = view.shape[1] - PANEL_WIDTH, view.shape[0]
-            cv2.imshow(window, view)
-            key = cv2.waitKeyEx(1)
-            if key in (ord("q"), 27) or cv2.getWindowProperty(window, cv2.WND_PROP_VISIBLE) < 1:
-                break
-            if key in UP_KEYS or key in DOWN_KEYS:
-                step = -1 if key in UP_KEYS else 1
-                state["species"] = names[(names.index(state["species"]) + step) % len(names)]
-            elif key == ord("m"):
-                side_by_side = not side_by_side
-            elif key == ord("r"):
-                set_sliders(window, initial)
-                state["species"] = initial.species
-            elif key == ord("s"):
-                name = f"dog-{params.species}-{time.strftime('%Y%m%d-%H%M%S')}.png"
-                cv2.imwrite(name, images)
-                print(f"Saved {name}")
-    finally:
-        cap.release()
-        cv2.destroyAllWindows()
+                self.error = "Camera stopped delivering frames"
+                return
+            with self._lock:
+                self._frame = frame
+
+    def render(self) -> np.ndarray | None:
+        """The current view as an RGB image at camera resolution, or None before the first frame."""
+        with self._lock:
+            frame = self._frame
+        if frame is None:
+            return None
+        simulated = simulate(frame, self.params)
+        self._last_images = np.hstack([frame, simulated]) if self.side_by_side else simulated
+        return self._last_images[..., ::-1]
+
+    def reset(self) -> None:
+        self.params = dataclasses.replace(self.initial)
+
+    def save_snapshot(self) -> str | None:
+        """Write the last rendered view to the working directory and return the file name."""
+        if self._last_images is None:
+            return None
+        name = f"dog-{self.params.species}-{time.strftime('%Y%m%d-%H%M%S')}.png"
+        cv2.imwrite(name, self._last_images)
+        return name
+
+    def close(self) -> None:
+        self._running = False
+        self._thread.join(timeout=1)
+        self._capture.release()
 
 
 def main() -> None:
@@ -402,7 +322,15 @@ def main() -> None:
     elif args.image:
         convert_file(args.image, params)
     else:
-        run_camera(args.camera, params)
+        import tk_window  # the only GUI-specific line in this module
+
+        session = LiveSession(args.camera, params)
+        try:
+            tk_window.run(session)
+        finally:
+            session.close()
+        if session.error:
+            sys.exit(session.error)
 
 
 if __name__ == "__main__":
