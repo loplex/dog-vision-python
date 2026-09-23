@@ -2,14 +2,15 @@
 
 *A camera feed or a photo, shown with the colours a dog — or another animal — can tell apart.*
 
-- [Running it](#running-it) — camera, photo, `--species`, `--compare`, `--adaptation`, `--strength`,
-  `--chroma-scale`, `--acuity`, `--fov`.
+- [Running it](#running-it) — camera, photo, `--species`, `--compare`, `--difference`, `--adaptation`,
+  `--strength`, `--chroma-scale`, `--acuity`, `--fov`.
 - [The camera window](#the-camera-window) — the species list, sliders and keys.
 - [Another GUI toolkit](#another-gui-toolkit) — `LiveSession` and `run(session)`.
 - [Species](#species) — every preset, with its cone peaks and source, and how each sees a test chart.
 - [How it works](#how-it-works) — the model in five steps.
 - [Colour saturation](#colour-saturation) — `fixed` or `rnl`, and what the second rests on.
 - [Acuity](#acuity) — blurring to what each species resolves, and when that shows.
+- [Map of differences](#map-of-differences) — where two views differ noticeably, and by what measure.
 - [What it cannot show](#what-it-cannot-show) — limits, grouped by whether they can be lifted.
 - [Checking it](#checking-it) — `--info` and `check_docs.py`.
 - [References](#references)
@@ -28,12 +29,15 @@ uv run dog_vision.py                     # live camera 0, as a dog
 uv run dog_vision.py --camera 1          # another camera
 uv run dog_vision.py --species horse     # another animal
 uv run dog_vision.py --species cow --compare horse   # two animals side by side
+uv run dog_vision.py --species cow --compare horse --difference   # and where they differ
 uv run dog_vision.py photo.jpg           # writes photo.dog.png next to it
 uv run dog_vision.py --adaptation 1 sunset.jpg
 ```
 
 - `--compare` puts a second species where the original would be, with the same settings, so two
   animals can be told apart directly; with a photo, both go into the output side by side.
+- `--difference` adds a third image marking where the two differ noticeably; see
+  [Map of differences](#map-of-differences).
 - `--adaptation` (0–1) adapts the cones to the scene instead of to daylight, so a sunset-lit
   scene loses its warm cast the way it would for an eye that has been in it for a while.
 - `--strength` (0–1) blends the simulation with the original; 0 is the original.
@@ -60,6 +64,7 @@ The images follow the window's size; the controls keep theirs.
 | *Acuity* box and slider         | same as `--acuity` and `--fov`                      |
 | *Side by side* box, `m`         | a second image beside the simulation, or not        |
 | *Left image* choice             | the original, or another species, as `--compare`    |
+| *Map of differences* box, `d`   | a third image marking where left and right differ   |
 | *Reset* button, `r`             | back to the values given on the command line        |
 | *Save snapshot* button, `s`     | saves `dog-<species>-<time>.png` in the current dir |
 | `q`, Esc                        | quits                                               |
@@ -72,8 +77,9 @@ Everything else sits in `LiveSession` in [`dog_vision.py`](dog_vision.py):
 
 - `render()` returns the current view as an RGB array, or `None` before the first frame.
   The camera is read on a thread of its own, so a GUI can call it from any timer.
-- `params` (species, adaptation, strength, chroma scale, acuity, field of view), `side_by_side` and
-  `compare` (the species on the left, or `None` for the original) are plain attributes to set.
+- `params` (species, adaptation, strength, chroma scale, acuity, field of view), `side_by_side`,
+  `compare` (the species on the left, or `None` for the original) and `difference` are plain
+  attributes to set.
 - `caption()` says what the rendered view shows, left to right.
 - `species_names` and `chroma_scales` list the choices in display order; `species_labels` adds
   each species' kind of colour vision to its name.
@@ -261,6 +267,27 @@ Acuity in cycles per degree, where a measurement was found:
 - **The result is right when it is seen at the angle it spans.** Viewed smaller, the viewer's own
   acuity blurs it further; viewed larger, blur a human would not notice becomes visible.
 
+## Map of differences
+
+`--difference`, or the window's *Map of differences*, adds a third image beside the two:
+
+- **Grey** where the left and right images look the same.
+- **Red** where they differ by more than one just-noticeable difference, deeper the larger the
+  difference; the caption gives the share of pixels that do.
+
+It compares the two images as a human sees them, in CIELAB, where one just-noticeable difference is
+about ΔE\*ab 2.3 (Mahy et al. 1994).
+That catches differences in colour and in sharpness alike.
+
+### Caveat: it measures the two images, not the two animals
+
+- **A human looks at both images**, so the map says what differs between two renderings, each
+  already reduced to what its animal can tell apart.
+- **ΔE\*ab 2.3 is an average.** The true threshold varies across colour space, so the edge of the
+  red region is approximate.
+- **Camera noise differs between a sharp and a blurred image**, so with `--acuity` noise shows up as
+  scattered red specks.
+
 ## What it cannot show
 
 ### Permanent: the information is not in the picture
@@ -343,6 +370,8 @@ Acuity in cycles per degree, where a measurement was found:
   experimentally detached cat retina. *J. Comp. Neurol.* 430.
 - Machado, G. M., Oliveira, M. M. & Fernandes, L. A. F. (2009). A physiologically-based model for
   simulation of color vision deficiency. *IEEE Trans. Vis. Comput. Graph.* 15.
+- Mahy, M., Van Eycken, L. & Oosterlinck, A. (1994). Evaluation of uniform color spaces developed
+  after the adoption of CIELAB and CIELUV. *Color Research & Application* 19, 105–121.
 - Mowat, F. M. et al. (2008). Topographical characterization of cone photoreceptors and the area
   centralis of the canine retina. *Molecular Vision* 14.
 - *Multiple loci for foveolar vision in macaque monkey visual cortex* (2024). *Nature Neuroscience*.

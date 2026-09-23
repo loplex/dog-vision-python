@@ -471,6 +471,34 @@ def acuity_fact(species: str) -> tuple[str, str]:
     return ("Acuity", f"{value} ({source})")
 
 
+HUMAN_JND_DELTA_E = 2.3  # CIELAB Delta E*ab of one just-noticeable difference (Mahy et al. 1994)
+DIFFERENCE_FULL_RED = 10.0  # Delta E*ab at which the difference map is fully red
+
+
+def lab_from_bgr(image_bgr: np.ndarray) -> np.ndarray:
+    """CIELAB (D65) of an 8-bit sRGB image in BGR order."""
+    linear = _DECODE[image_bgr][..., ::-1]
+    xyz = linear @ np.array([[0.4124, 0.3576, 0.1805], [0.2126, 0.7152, 0.0722], [0.0193, 0.1192, 0.9505]], np.float32).T
+    t = xyz / np.array([0.95047, 1.0, 1.08883], np.float32)
+    f = np.where(t > (6 / 29) ** 3, np.cbrt(t), t / (3 * (6 / 29) ** 2) + 4 / 29)
+    return np.stack([116 * f[..., 1] - 16, 500 * (f[..., 0] - f[..., 1]), 200 * (f[..., 1] - f[..., 2])], axis=-1)
+
+
+def difference_map(left_bgr: np.ndarray, right_bgr: np.ndarray) -> tuple[np.ndarray, float]:
+    """Where two images look different to a human, and the share of pixels that do.
+
+    The map is the right image in dimmed grey, reddened where the CIELAB difference
+    exceeds one just-noticeable difference, fully so at DIFFERENCE_FULL_RED.
+    """
+    delta_e = np.linalg.norm(lab_from_bgr(left_bgr) - lab_from_bgr(right_bgr), axis=-1)
+    noticeable = delta_e > HUMAN_JND_DELTA_E
+    grey = cv2.cvtColor(right_bgr, cv2.COLOR_BGR2GRAY).astype(np.float32) * 0.6
+    weight = np.where(noticeable, np.clip(delta_e / DIFFERENCE_FULL_RED, 0.3, 1.0), 0.0)[..., None]
+    red = np.array([40, 40, 255], np.float32)  # BGR
+    image = np.repeat(grey[..., None], 3, axis=-1) * (1 - weight) + red * weight
+    return image.astype(np.uint8), float(noticeable.mean())
+
+
 def mean_linear_rgb(frame_bgr: np.ndarray) -> np.ndarray:
     """Mean linear RGB of an 8-bit BGR image, estimated from every 8th pixel."""
     return _DECODE[frame_bgr[::8, ::8]].reshape(-1, 3).mean(axis=0)[::-1]
@@ -481,15 +509,19 @@ def simulate(frame_bgr: np.ndarray, params: Params) -> np.ndarray:
     return apply_bgr(frame_bgr, simulation_matrix(params, mean_rgb), acuity_blur(params, frame_bgr.shape[1]))
 
 
-def convert_file(path: Path, params: Params, compare: str | None = None) -> None:
+def convert_file(path: Path, params: Params, compare: str | None = None, difference: bool = False) -> None:
     image = cv2.imread(str(path), cv2.IMREAD_COLOR)
     if image is None:
         sys.exit(f"Cannot read image: {path}")
     out_path = path.with_suffix(".dog.png")
     simulated = simulate(image, params)
-    if compare is not None:
-        simulated = np.hstack([simulate(image, dataclasses.replace(params, species=compare)), simulated])
-    cv2.imwrite(str(out_path), simulated)
+    left = image if compare is None else simulate(image, dataclasses.replace(params, species=compare))
+    parts = [left, simulated] if compare is not None or difference else [simulated]
+    if difference:
+        diff, share = difference_map(left, simulated)
+        parts.append(diff)
+        print(f"{share:.0%} of pixels differ noticeably")
+    cv2.imwrite(str(out_path), np.hstack(parts))
     print(f"Wrote {out_path}")
 
 
@@ -510,6 +542,8 @@ class LiveSession:
         self.side_by_side = True
         self.initial_compare = compare
         self.compare = compare  # the species on the left instead of the original, if any
+        self.difference = False  # add a map of where left and right differ noticeably
+        self._difference_share: float | None = None
         self.error: str | None = None  # set when the camera stops delivering frames
         self._capture = cv2.VideoCapture(camera_index)
         if not self._capture.isOpened():
@@ -537,9 +571,14 @@ class LiveSession:
         if frame is None:
             return None
         simulated = simulate(frame, self.params)
+        self._difference_share = None
         if self.side_by_side:
             left = frame if self.compare is None else simulate(frame, dataclasses.replace(self.params, species=self.compare))
-            self._last_images = np.hstack([left, simulated])
+            parts = [left, simulated]
+            if self.difference:
+                diff, self._difference_share = difference_map(left, simulated)
+                parts.append(diff)
+            self._last_images = np.hstack(parts)
         else:
             self._last_images = simulated
         return self._last_images[..., ::-1]
@@ -550,7 +589,10 @@ class LiveSession:
         if not self.side_by_side:
             return right
         left = "original" if self.compare is None else species_label(self.compare)
-        return f"left: {left}    right: {right}"
+        text = f"left: {left}    right: {right}"
+        if self._difference_share is not None:
+            text += f"    red: noticeably different ({self._difference_share:.0%} of pixels)"
+        return text
 
     def reset(self) -> None:
         self.params = dataclasses.replace(self.initial)
@@ -598,6 +640,9 @@ def main() -> None:
     parser.add_argument(
         "--compare", choices=SPECIES, help="show this species beside --species instead of the original"
     )
+    parser.add_argument(
+        "--difference", action="store_true", help="add a map of where the two images differ noticeably"
+    )
     parser.add_argument("--acuity", action="store_true", help="blur to the species' visual acuity")
     parser.add_argument(
         "--fov",
@@ -611,11 +656,12 @@ def main() -> None:
     if args.info:
         print_info(params)
     elif args.image:
-        convert_file(args.image, params, args.compare)
+        convert_file(args.image, params, args.compare, args.difference)
     else:
         import tk_window  # the only GUI-specific line in this module
 
         session = LiveSession(args.camera, params, args.compare)
+        session.difference = args.difference
         try:
             tk_window.run(session)
         finally:

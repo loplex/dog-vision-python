@@ -169,6 +169,17 @@ def run(session: LiveSession) -> None:
         session.compare = None if index == 0 else session.species_names[index - 1]
 
     left.bind("<<ComboboxSelected>>", on_left)
+    difference = tk.BooleanVar(value=session.difference)
+    ttk.Checkbutton(
+        view,
+        text="Map of differences (d)",
+        variable=difference,
+        command=lambda: setattr(session, "difference", difference.get()),
+    ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(4, 0))
+
+    def toggle_difference() -> None:
+        difference.set(not difference.get())
+        session.difference = difference.get()
 
     status = ttk.Label(side, text="", width=28)
 
@@ -213,6 +224,7 @@ def run(session: LiveSession) -> None:
 
     species.bind("<<ListboxSelect>>", on_select)
     root.bind("<KeyPress-m>", lambda _: toggle_side_by_side())
+    root.bind("<KeyPress-d>", lambda _: toggle_difference())
     root.bind("<KeyPress-r>", lambda _: reset())
     root.bind("<KeyPress-s>", lambda _: save())
     root.bind("<KeyPress-q>", lambda _: root.destroy())
