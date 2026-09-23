@@ -2,12 +2,14 @@
 
 *A camera feed or a photo, shown with the colours a dog — or another animal — can tell apart.*
 
-- [Running it](#running-it) — camera, photo, `--species`, `--adaptation`, `--strength`, `--chroma-scale`.
+- [Running it](#running-it) — camera, photo, `--species`, `--adaptation`, `--strength`, `--chroma-scale`,
+  `--acuity`, `--fov`.
 - [The camera window](#the-camera-window) — the species list, sliders and keys.
 - [Another GUI toolkit](#another-gui-toolkit) — `LiveSession` and `run(session)`.
 - [Species](#species) — every preset, with its cone peaks and source, and how each sees a test chart.
 - [How it works](#how-it-works) — the model in five steps.
 - [Colour saturation](#colour-saturation) — `fixed` or `rnl`, and what the second rests on.
+- [Acuity](#acuity) — blurring to what each species resolves, and when that shows.
 - [What it cannot show](#what-it-cannot-show) — limits, grouped by whether they can be lifted.
 - [Checking it](#checking-it) — `--info` and `check_docs.py`.
 - [References](#references)
@@ -34,6 +36,8 @@ uv run dog_vision.py --adaptation 1 sunset.jpg
 - `--strength` (0–1) blends the simulation with the original; 0 is the original.
 - `--chroma-scale fixed|rnl` picks how saturated a dichromat's colours come out; see
   [Colour saturation](#colour-saturation).
+- `--acuity` blurs to the species' visual acuity, and `--fov` says how many degrees the image spans;
+  see [Acuity](#acuity).
 - `uv run dog_vision.py --help` lists every option.
 
 ## The camera window
@@ -48,7 +52,8 @@ The image follows the window's size; the controls keep theirs.
 | mouse wheel over the list       | scrolls it                                          |
 | *Adaptation to scene* slider    | same as `--adaptation`, in percent                  |
 | *Simulation strength* slider    | same as `--strength`, in percent                    |
-| *Colour saturation* choice      | same as `--chroma-scale`, with the RNL gain beneath |
+| *Colour saturation* choice      | same as `--chroma-scale`                            |
+| *Acuity* box and slider         | same as `--acuity` and `--fov`                      |
 | *Side by side* box, `m`         | the original beside the simulation, or not          |
 | *Reset* button, `r`             | back to the values given on the command line        |
 | *Save snapshot* button, `s`     | saves `dog-<species>-<time>.png` in the current dir |
@@ -62,7 +67,8 @@ Everything else sits in `LiveSession` in [`dog_vision.py`](dog_vision.py):
 
 - `render()` returns the current view as an RGB array, or `None` before the first frame.
   The camera is read on a thread of its own, so a GUI can call it from any timer.
-- `params` (species, adaptation, strength) and `side_by_side` are plain attributes to set.
+- `params` (species, adaptation, strength, chroma scale, acuity, field of view) and `side_by_side` are
+  plain attributes to set.
 - `species_names` and `chroma_scales` list the choices in display order; `species_labels` adds
   each species' kind of colour vision to its name.
 - `species_facts()` returns what is known about the current species as (label, value) rows.
@@ -199,6 +205,56 @@ image as it is, since nothing merges: `rnl` is the only way it looks different.
   extrapolated.
 - **Monochromats** have no chromatic axis, so both scales give the same grey image.
 
+## Acuity
+
+`--acuity` removes the detail finer than the species resolves, the way AcuityView does
+(Caves & Johnsen 2018): the image is filtered with the modulation transfer function
+exp(−3.56 (f / acuity)²), f in cycles per degree, which is a Gaussian blur in linear light.
+
+Acuity in cycles per degree, where a measurement was found:
+
+| `--species`          | Side by side [c/°] | One above another [c/°] | Source                                     |
+|----------------------|--------------------|-------------------------|--------------------------------------------|
+| `dog`                | 11.6               | 11.6                    | Odom et al. 1983                           |
+| `cat`                | 10                 | 10                      | Wässle 1971                                |
+| `horse`              | 23.3               | 23.3                    | Timney & Keil 1992                         |
+| `cow`                | 2.6                | 1.6                     | Rehkämper et al. 2000                      |
+| `sheep`              | 12.8               | 12.8                    | Sumita et al. 2013, 11.7 to 14             |
+| `goat`               | –                  | –                       | not found measured                         |
+| `pig`                | –                  | –                       | not found measured                         |
+| `fallow-deer`        | –                  | –                       | not found measured                         |
+| `white-tailed-deer`  | –                  | –                       | not found measured                         |
+| `guinea-pig`         | –                  | –                       | not found measured                         |
+| `tree-squirrel`      | 2.8                | 2.8                     | Jacobs, Birch & Blakeslee 1982, 1.8 to 3.8 |
+| `ground-squirrel`    | 4                  | 4                       | Jacobs et al. 1980                         |
+| `ferret`             | –                  | –                       | not found measured                         |
+| `protanope`          | 72                 | 72                      | Land & Nilsson 2012                        |
+| `deuteranope`        | 72                 | 72                      | Land & Nilsson 2012                        |
+| `human`              | 72                 | 72                      | Land & Nilsson 2012                        |
+| `protanomalous`      | 72                 | 72                      | Land & Nilsson 2012                        |
+| `deuteranomalous`    | 72                 | 72                      | Land & Nilsson 2012                        |
+| `macaque`            | 60                 | 60                      | Nature Neuroscience 2024, about 60         |
+| `howler-monkey`      | –                  | –                       | not found measured                         |
+| `marmoset-female`    | 30                 | 30                      | Troilo, Howland & Judge 1993               |
+| `harbour-seal`       | 5.5                | 5.5                     | Hanke & Dehnhardt 2009, in air             |
+| `bottlenose-dolphin` | 3.66               | 3.66                    | Herman et al. 1975, 8.2 arcmin stripes     |
+
+- **Cattle resolve detail side by side better than one above another**; their pupil is a horizontal
+  oval, and the blur is stretched accordingly.
+- **A range in the source** (sheep, tree squirrel) is replaced by its middle, and the source column
+  says so.
+- **Species without a measurement** are left sharp, and the window says so.
+
+### Caveat: the blur needs to know how wide the image is in degrees
+
+- **`--fov` is that angle**, 60° by default, which is typical of a camera but only a guess for a
+  photo. Halving it halves the blur.
+- **An image shows the blur only if it has more pixels per degree than the species resolves.**
+  An image 640 pixels wide spanning 60° has about 11 pixels per degree, so a dog's blur is under half
+  a pixel and invisible, while a 4000-pixel photo of the same scene blurs it by over two pixels.
+- **The result is right when it is seen at the angle it spans.** Viewed smaller, the viewer's own
+  acuity blurs it further; viewed larger, blur a human would not notice becomes visible.
+
 ## What it cannot show
 
 ### Permanent: the information is not in the picture
@@ -221,7 +277,7 @@ image as it is, since nothing merges: `rnl` is the only way it looks different.
 - **The display primaries are generic**, not those of the screen in front of you.
 - **Blue–yellow is a convention.** Which human hues stand for a dichromat's single chromatic axis
   is not fixed by physics.
-- **Only colour is simulated** — not the dog's lower acuity, its motion sensitivity or its dim-light vision.
+- **Colour and acuity are simulated** — not motion sensitivity or dim-light vision.
 
 ## Checking it
 
@@ -245,6 +301,8 @@ image as it is, since nothing merges: `rnl` is the only way it looks different.
   cones. *Visual Neuroscience* 20.
 - Carroll, J., Murphy, C. J., Neitz, M. et al. (2001). Photopigment basis for dichromatic color
   vision in the horse. *Journal of Vision* 1.
+- Caves, E. M. & Johnsen, S. (2018). AcuityView: an R package for portraying the effects of visual
+  acuity on scenes observed by an animal. *Methods Ecol. Evol.* 9, 793–797.
 - Crognale, M. A., Levenson, D. H., Ponganis, P. J., Deegan, J. F. & Jacobs, G. H. (1998). Cone
   spectral sensitivity in the harbor seal (*Phoca vitulina*) and implications for color vision.
   *Can. J. Zool.* 76, 2114–2118.
@@ -256,8 +314,16 @@ image as it is, since nothing merges: `rnl` is the only way it looks different.
   the visual pigment template. *Visual Neuroscience* 17, 509–528.
 - Guenther, E. & Zrenner, E. (1993). The spectral sensitivity of dark- and light-adapted cat
   retinal ganglion cells. *J. Neurosci.* 13, 1543–1550.
+- Hanke, F. D. & Dehnhardt, G. (2009). Aerial visual acuity in harbor seals (*Phoca vitulina*) as a
+  function of luminance. *J. Comp. Physiol. A* 195.
+- Herman, L. M., Peacock, M. F., Yunker, M. P. & Madsen, C. J. (1975). Bottle-nosed dolphin:
+  double-slit pupil yields equivalent aerial and underwater diurnal acuity. *Science* 189.
 - Jacobs, G. H. & Deegan, J. F. (1994). Spectral sensitivity, photopigments, and color vision in the
   guinea pig (*Cavia porcellus*). *Behav. Neurosci.* 108, 993–1004.
+- Jacobs, G. H., Birch, D. G. & Blakeslee, B. (1982). Visual acuity and spatial contrast sensitivity
+  in tree squirrels. *Behavioural Processes* 7.
+- Jacobs, G. H., Blakeslee, B., McCourt, M. E. & Tootell, R. B. H. (1980). Visual sensitivity of
+  ground squirrels to spatial and temporal luminance variations. *J. Comp. Physiol. A* 136.
 - Jacobs, G. H., Deegan, J. F. & Neitz, J. (1998). Photopigment basis for dichromatic color vision
   in cows, goats, and sheep. *Visual Neuroscience* 15, 581–584.
 - Jacobs, G. H., Neitz, J. & Crognale, M. (1985). Spectral sensitivity of ground squirrel cones
@@ -266,14 +332,20 @@ image as it is, since nothing merges: `rnl` is the only way it looks different.
   World monkeys. *Nature* 382.
 - Kryger, Z. et al. (1998). The topography of rod and cone photoreceptors in the retina of the
   ground squirrel. *Visual Neuroscience* 15.
+- Land, M. F. & Nilsson, D.-E. (2012). *Animal Eyes*, 2nd edition. Oxford University Press.
 - Linberg, K. A., Lewis, G. P. et al. (2001). Distribution of S- and M-cones in normal and
   experimentally detached cat retina. *J. Comp. Neurol.* 430.
 - Machado, G. M., Oliveira, M. M. & Fernandes, L. A. F. (2009). A physiologically-based model for
   simulation of color vision deficiency. *IEEE Trans. Vis. Comput. Graph.* 15.
 - Mowat, F. M. et al. (2008). Topographical characterization of cone photoreceptors and the area
   centralis of the canine retina. *Molecular Vision* 14.
+- *Multiple loci for foveolar vision in macaque monkey visual cortex* (2024). *Nature Neuroscience*.
 - Neitz, J., Geist, T. & Jacobs, G. H. (1989). Color vision in the dog. *Visual Neuroscience* 3,
   119–125.
+- Odom, J. V., et al. (1983). Canine visual acuity: retinal and cortical field potentials evoked by
+  pattern stimulation. *Am. J. Physiol.* 245.
+- Rehkämper, G., Perrey, A., Werner, C. W., Opfermann-Rüngeler, C. & Görlach, A. (2000). Visual
+  perception and stimulus orientation in cattle. *Vision Research* 40, 2489–2497.
 - Roorda, A. & Williams, D. R. (1999). The arrangement of the three cone classes in the living
   human eye. *Nature* 397, 520–522.
 - Sandmann, D., Boycott, B. B. & Peichl, L. (1996). Blue-cone horizontal cells in the retinae of
@@ -284,11 +356,18 @@ image as it is, since nothing merges: `rnl` is the only way it looks different.
 - Stockman, A. & Sharpe, L. T. (2000). The spectral sensitivities of the middle- and
   long-wavelength-sensitive cones derived from measurements in observers of known genotype.
   *Vision Research* 40, 1711–1737.
+- Sumita, S., Prescott, N. B., Broom, D. M., Wathes, C. M. & Phillips, C. J. C. (2013). Visual
+  discrimination learning and spatial acuity in sheep. *Appl. Anim. Behav. Sci.* 147.
+- Timney, B. & Keil, K. (1992). Visual acuity in the horse. *Vision Research* 32.
 - Travis, D. S., Bowmaker, J. K. & Mollon, J. D. (1988). Polymorphism of visual pigments in a
   callitrichid monkey. *Vision Research* 28, 481–490.
+- Troilo, D., Howland, H. C. & Judge, S. J. (1993). Visual optics and retinal cone topography in the
+  common marmoset (*Callithrix jacchus*). *Vision Research* 33.
 - Viénot, F., Brettel, H. & Mollon, J. D. (1999). Digital video colourmaps for checking the
   legibility of displays by dichromats. *Color Research & Application* 24, 243–252.
 - Vorobyev, M. & Osorio, D. (1998). Receptor noise as a determinant of colour thresholds.
   *Proc. R. Soc. B* 265, 351–358.
 - Williams, A. J. et al. (1992). The polymorphic photopigments of the marmoset: spectral tuning and
   genetic basis. *EMBO J.* 11.
+- Wässle, H. (1971), as listed in the
+  [micaToolbox acuity list](http://www.empiricalimaging.com/knowledge-base/list-of-animal-spatial-acuities/).

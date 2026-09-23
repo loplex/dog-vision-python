@@ -27,6 +27,8 @@ Model (after Brettel, Viénot & Mollon 1997):
    onto all of RGB: nothing merges, so without step 6 its image is unchanged.
 5. Optionally the cones adapt to the scene (von Kries gains taken from the
    image mean, "grey world"), and the result is blended with the input.
+   Optionally the image is also blurred to the animal's visual acuity, as
+   AcuityView does (Caves & Johnsen 2018), for a given field of view.
 6. The saturation of the animal's colour axes is either left as step 4 gives
    it ("fixed"), or scaled so that one step the animal can just discriminate is
    one step a human can ("rnl"), both judged by the receptor noise limited model
@@ -136,6 +138,27 @@ ASSUMED_L_TO_M = 1.0
 
 COLOUR_VISION = {1: "monochromat", 2: "dichromat", 3: "trichromat"}
 
+# Visual acuity in cycles per degree, as (resolving detail side by side, resolving
+# detail one above another) — the two differ only for cattle, whose pupil is a
+# horizontal oval — and where it comes from. A species missing here was not found
+# measured, and is left sharp.
+HUMAN_ACUITY = ((72.0, 72.0), "Land & Nilsson 2012")
+ACUITY = {
+    "dog": ((11.6, 11.6), "Odom et al. 1983"),
+    "cat": ((10.0, 10.0), "Wässle 1971"),
+    "horse": ((23.3, 23.3), "Timney & Keil 1992"),
+    "cow": ((2.6, 1.6), "Rehkämper et al. 2000"),
+    "sheep": ((12.85, 12.85), "Sumita et al. 2013, 11.7 to 14"),
+    "tree-squirrel": ((2.8, 2.8), "Jacobs, Birch & Blakeslee 1982, 1.8 to 3.8"),
+    "ground-squirrel": ((4.0, 4.0), "Jacobs et al. 1980"),
+    **dict.fromkeys(["protanope", "deuteranope", "human", "protanomalous", "deuteranomalous"], HUMAN_ACUITY),
+    "macaque": ((60.0, 60.0), "Nature Neuroscience 2024, about 60"),
+    "marmoset-female": ((30.0, 30.0), "Troilo, Howland & Judge 1993"),
+    "harbour-seal": ((5.5, 5.5), "Hanke & Dehnhardt 2009, in air"),
+    "bottlenose-dolphin": ((60 / (2 * 8.2), 60 / (2 * 8.2)), "Herman et al. 1975, 8.2 arcmin stripes"),
+}
+DEFAULT_FIELD_OF_VIEW = 60.0  # degrees across the image; a common camera, an assumption for photos
+
 CHROMA_SCALES = ("fixed", "rnl")
 
 
@@ -145,6 +168,8 @@ class Params:
     adaptation: float = 0.0  # 0 = adapted to daylight, 1 = fully to the scene mean
     strength: float = 1.0  # 0 = original image, 1 = full simulation
     chroma_scale: str = "fixed"  # one of CHROMA_SCALES
+    acuity: bool = False  # blur to the species' visual acuity
+    field_of_view: float = DEFAULT_FIELD_OF_VIEW  # degrees the image spans horizontally
 
     def cones(self) -> tuple[float, ...]:
         return SPECIES[self.species]
@@ -346,11 +371,27 @@ _ENCODE = np.array(
 ).round().astype(np.uint8)
 
 
-def apply_bgr(frame_bgr: np.ndarray, t_rgb: np.ndarray) -> np.ndarray:
-    """Apply a linear-RGB 3x3 matrix to an 8-bit BGR image."""
+def acuity_blur(params: Params, width: int) -> tuple[float, float] | None:
+    """Gaussian sigmas in pixels (x, y) matching the species' acuity, or None for no blur.
+
+    AcuityView (Caves & Johnsen 2018) multiplies the spectrum by the modulation transfer
+    function exp(-3.56 (MRA f)^2), with f in cycles per degree and MRA = 1 / acuity the
+    minimum resolvable angle. That is a Gaussian of sigma = sqrt(3.56 / (2 pi^2)) MRA
+    degrees, which is cheaper to apply to video than a Fourier transform.
+    """
+    if not params.acuity or params.species not in ACUITY:
+        return None
+    pixels_per_degree = width / params.field_of_view
+    return tuple(np.sqrt(3.56 / (2 * np.pi**2)) / acuity * pixels_per_degree for acuity in ACUITY[params.species][0])
+
+
+def apply_bgr(frame_bgr: np.ndarray, t_rgb: np.ndarray, blur: tuple[float, float] | None = None) -> np.ndarray:
+    """Apply a linear-RGB 3x3 matrix, and optionally a Gaussian blur, to an 8-bit BGR image."""
     flip = np.eye(3)[::-1]  # RGB <-> BGR permutation
     t_bgr = (flip @ t_rgb @ flip).astype(np.float32)
     linear = _DECODE[frame_bgr]
+    if blur is not None:  # in linear light, like the optics it stands for
+        linear = cv2.GaussianBlur(linear, (0, 0), sigmaX=blur[0], sigmaY=blur[1])
     out = linear @ t_bgr.T
     np.clip(out, 0.0, 1.0, out=out)
     return _ENCODE[(out * (_ENCODE_STEPS - 1)).astype(np.int32)]
@@ -406,7 +447,7 @@ def species_facts(species: str) -> list[tuple[str, str]]:
         ("Peaks from", PEAKS_FROM[species]),
     ]
     if n == 1:
-        return facts + [("RNL scale", "nothing to scale")]
+        return facts + [("RNL scale", "nothing to scale"), acuity_fact(species)]
     if species in S_CONE_FRACTION:
         low, high, source = S_CONE_FRACTION[species]
         share = f"{low:.0%}" if round(low * 100) == round(high * 100) else f"{low:.0%}–{high:.0%}"
@@ -418,7 +459,15 @@ def species_facts(species: str) -> list[tuple[str, str]]:
     else:
         facts.append(("Neutral point", f"{neutral_point(Params(species)):.0f} nm (model)"))
     gains = " and ".join(f"x{gain:.2f}" for gain in rnl_gains(Params(species)))
-    return facts + [("RNL scale", f"{gains} of fixed")]
+    return facts + [("RNL scale", f"{gains} of fixed"), acuity_fact(species)]
+
+
+def acuity_fact(species: str) -> tuple[str, str]:
+    if species not in ACUITY:
+        return ("Acuity", "not found measured; left sharp")
+    (across, up), source = ACUITY[species]
+    value = f"{across:.3g} c/deg" if across == up else f"{across:.3g} c/deg side by side, {up:.3g} one above another"
+    return ("Acuity", f"{value} ({source})")
 
 
 def mean_linear_rgb(frame_bgr: np.ndarray) -> np.ndarray:
@@ -428,7 +477,7 @@ def mean_linear_rgb(frame_bgr: np.ndarray) -> np.ndarray:
 
 def simulate(frame_bgr: np.ndarray, params: Params) -> np.ndarray:
     mean_rgb = mean_linear_rgb(frame_bgr) if params.adaptation > 0 else None
-    return apply_bgr(frame_bgr, simulation_matrix(params, mean_rgb))
+    return apply_bgr(frame_bgr, simulation_matrix(params, mean_rgb), acuity_blur(params, frame_bgr.shape[1]))
 
 
 def convert_file(path: Path, params: Params) -> None:
@@ -526,8 +575,15 @@ def main() -> None:
         help="saturation of a dichromat's colour axis: fixed by the projection, or matched"
         " to the animal's discrimination with the RNL model (default %(default)s)",
     )
+    parser.add_argument("--acuity", action="store_true", help="blur to the species' visual acuity")
+    parser.add_argument(
+        "--fov",
+        type=float,
+        default=defaults.field_of_view,
+        help="degrees the image spans horizontally, for --acuity (default %(default)s)",
+    )
     args = parser.parse_args()
-    params = Params(args.species, args.adaptation, args.strength, args.chroma_scale)
+    params = Params(args.species, args.adaptation, args.strength, args.chroma_scale, args.acuity, args.fov)
 
     if args.info:
         print_info(params)

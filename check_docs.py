@@ -5,6 +5,7 @@
 """Check README.md against the code it describes.
 
 - The species table lists exactly SPECIES, in order, with the same peaks, S-cone shares and sources.
+- The acuity table does the same for ACUITY.
 - Every relative link points at an existing file, and every #anchor at a heading.
 - The neutral points quoted under "What it cannot show" still hold for the model.
 - docs/species-grid.png is what render_species_grid.py renders from the current code.
@@ -62,6 +63,31 @@ def check_species_table(readme: str) -> list[str]:
     return errors
 
 
+def acuity_cells(name: str) -> list[str]:
+    """The cells the acuity table should hold for a species: across, up, source."""
+    if name not in dv.ACUITY:
+        return ["–", "–", "not found measured"]
+    (across, up), source = dv.ACUITY[name]
+    return [f"{across:.3g}", f"{up:.3g}", source]
+
+
+def check_acuity_table(readme: str) -> list[str]:
+    start = re.search(r"^\| `--species` +\| Side by side", readme, flags=re.M).start()
+    table = readme[start:].split("\n\n")[0].splitlines()[2:]
+    rows = {}
+    for line in table:
+        match = re.match(r"^\| `([\w-]+)` +\|(.*)\|$", line)
+        if match:
+            rows[match[1]] = [cell.strip() for cell in match[2].split("|")]
+    errors = []
+    if list(rows) != list(dv.SPECIES):
+        errors.append(f"acuity table lists {list(rows)}, SPECIES has {list(dv.SPECIES)}")
+    for name in dv.SPECIES:
+        if name in rows and rows[name] != acuity_cells(name):
+            errors.append(f"acuity table row {name}: {rows[name]}, the code gives {acuity_cells(name)}")
+    return errors
+
+
 def check_links(path: Path) -> list[str]:
     text = without_code_blocks(path.read_text())
     anchors = {slug(h) for h in re.findall(r"^#+ (.+)$", text, flags=re.M)}
@@ -90,7 +116,8 @@ def check_neutral_points() -> list[str]:
 
 def main() -> int:
     readme = ROOT / "README.md"
-    errors = check_species_table(readme.read_text()) + check_links(readme) + check_neutral_points()
+    text = readme.read_text()
+    errors = check_species_table(text) + check_acuity_table(text) + check_links(readme) + check_neutral_points()
     if not render_species_grid.matches_file():
         errors.append("docs/species-grid.png is out of date; run: uv run render_species_grid.py")
     for error in errors:

@@ -46,6 +46,29 @@ def warn_without_xft(root: tk.Tk) -> None:
         )
 
 
+class LabelledSlider:
+    """A slider with its label and current value on the line above it, so the three read as one."""
+
+    def __init__(self, parent: tk.Misc, label: str, low: int, high: int, on_change) -> None:
+        self.frame = ttk.Frame(parent)
+        self.frame.columnconfigure(0, weight=1)
+        ttk.Label(self.frame, text=label).grid(row=0, column=0, sticky="w")
+        self.value = ttk.Label(self.frame, width=4, anchor="e")
+        self.value.grid(row=0, column=1, sticky="e")
+        self.on_change = on_change
+        self.scale = ttk.Scale(self.frame, from_=low, to=high, orient="horizontal", command=self._slid)
+        self.scale.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(2, 0))
+
+    def _slid(self, position: str) -> None:
+        number = round(float(position))
+        self.value.configure(text=str(number))
+        self.on_change(number)
+
+    def set(self, number: int) -> None:
+        self.scale.set(number)
+        self.value.configure(text=str(number))
+
+
 def run(session: LiveSession) -> None:
     root = tk.Tk()
     root.title("Dog vision")
@@ -90,24 +113,11 @@ def run(session: LiveSession) -> None:
             ttk.Label(facts_frame, text=label, foreground="#555555").grid(row=row, column=0, sticky="nw", padx=(0, 8))
             ttk.Label(facts_frame, text=value, wraplength=190).grid(row=row, column=1, sticky="w")
 
-    sliders: dict[str, tuple[ttk.Scale, ttk.Label]] = {}
+    sliders: dict[str, LabelledSlider] = {}
     for row, (field, label) in enumerate(PERCENT_SLIDERS.items(), start=3):
-        # Label and value share the line above their slider, so each group reads as one.
-        group = ttk.Frame(side)
-        group.grid(row=row, column=0, sticky="ew", pady=(8, 0))
-        group.columnconfigure(0, weight=1)
-        ttk.Label(group, text=label).grid(row=0, column=0, sticky="w")
-        value = ttk.Label(group, width=4, anchor="e")
-        value.grid(row=0, column=1, sticky="e")
-
-        def on_slide(position: str, field: str = field, value: ttk.Label = value) -> None:
-            percent = round(float(position))
-            value.configure(text=str(percent))
-            setattr(session.params, field, percent / 100)
-
-        slider = ttk.Scale(group, from_=0, to=100, orient="horizontal", command=on_slide)
-        slider.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(2, 0))
-        sliders[field] = (slider, value)
+        slider = LabelledSlider(side, label, 0, 100, lambda percent, field=field: setattr(session.params, field, percent / 100))
+        slider.frame.grid(row=row, column=0, sticky="ew", pady=(8, 0))
+        sliders[field] = slider
 
     chroma = ttk.LabelFrame(side, text="Colour saturation", padding=(8, 4))
     chroma.grid(row=5, column=0, sticky="ew", pady=(10, 0))
@@ -122,13 +132,28 @@ def run(session: LiveSession) -> None:
             chroma, text=chroma_labels[value], value=value, variable=chroma_scale, command=on_chroma_scale
         ).pack(anchor="w")
 
+    acuity_frame = ttk.LabelFrame(side, text="Acuity", padding=(8, 4))
+    acuity_frame.grid(row=6, column=0, sticky="ew", pady=(10, 0))
+    acuity_frame.columnconfigure(0, weight=1)
+    acuity = tk.BooleanVar(value=session.params.acuity)
+    ttk.Checkbutton(
+        acuity_frame,
+        text="Blur to the species' acuity",
+        variable=acuity,
+        command=lambda: setattr(session.params, "acuity", acuity.get()),
+    ).grid(row=0, column=0, sticky="w")
+    field_of_view = LabelledSlider(
+        acuity_frame, "Image spans [degrees]", 10, 120, lambda degrees: setattr(session.params, "field_of_view", float(degrees))
+    )
+    field_of_view.frame.grid(row=1, column=0, sticky="ew", pady=(4, 0))
+
     side_by_side = tk.BooleanVar(value=session.side_by_side)
     ttk.Checkbutton(
         side,
         text="Side by side (m)",
         variable=side_by_side,
         command=lambda: setattr(session, "side_by_side", side_by_side.get()),
-    ).grid(row=6, column=0, sticky="w", pady=(10, 0))
+    ).grid(row=7, column=0, sticky="w", pady=(10, 0))
 
     status = ttk.Label(side, text="", width=28)
 
@@ -139,10 +164,10 @@ def run(session: LiveSession) -> None:
         species.selection_set(index)
         species.activate(index)
         species.see(index)
-        for field, (slider, value) in sliders.items():
-            percent = round(getattr(session.params, field) * 100)
-            slider.set(percent)
-            value.configure(text=str(percent))
+        for field, slider in sliders.items():
+            slider.set(round(getattr(session.params, field) * 100))
+        acuity.set(session.params.acuity)
+        field_of_view.set(round(session.params.field_of_view))
         chroma_scale.set(session.params.chroma_scale)
         show_facts()
 
@@ -159,10 +184,10 @@ def run(session: LiveSession) -> None:
         session.side_by_side = side_by_side.get()
 
     buttons = ttk.Frame(side)
-    buttons.grid(row=7, column=0, sticky="ew", pady=(10, 0))
+    buttons.grid(row=8, column=0, sticky="ew", pady=(10, 0))
     ttk.Button(buttons, text="Reset (r)", command=reset).pack(side="left")
     ttk.Button(buttons, text="Save snapshot (s)", command=save).pack(side="left", padx=(6, 0))
-    status.grid(row=8, column=0, sticky="w", pady=(6, 0))
+    status.grid(row=9, column=0, sticky="w", pady=(6, 0))
 
     def on_select(_event: tk.Event) -> None:
         selection = species.curselection()
