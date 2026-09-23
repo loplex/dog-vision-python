@@ -29,9 +29,8 @@ Model (after Brettel, Viénot & Mollon 1997):
    image mean, "grey world"), and the result is blended with the input.
 6. The saturation of the animal's colour axes is either left as step 4 gives
    it ("fixed"), or scaled so that one step the animal can just discriminate is
-   one step a human can ("rnl"): the animal side comes from the receptor noise
-   limited model of Vorobyev & Osorio (1998), the human side from CIELAB, where
-   a just-noticeable difference is about Delta E*ab 2.3 (Mahy et al. 1994).
+   one step a human can ("rnl"), both judged by the receptor noise limited model
+   of Vorobyev & Osorio (1998), with the same cone noise for animal and human.
 
 The whole transform collapses into one 3x3 matrix on linear RGB. Without
 adaptation its rank equals the number of cone types, and the animal's cone
@@ -118,12 +117,6 @@ ASSUMED_S_CONE_FRACTION = (0.10, 0.10)  # the middle of what the measured specie
 # about twice as many L as M cones to the reverse (Roorda & Williams 1999), so the
 # RNL scale takes 1:1 for every trichromat and calls it assumed.
 ASSUMED_L_TO_M = 1.0
-
-# Receptor noise of the L cone as a Weber fraction. It has been measured for almost
-# no mammal, so every species gets the value the literature uses when it is unknown.
-WEBER_FRACTION = 0.05
-HUMAN_JND_DELTA_E = 2.3  # CIELAB Delta E*ab of one just-noticeable difference (Mahy et al. 1994)
-REFERENCE_GREY = 0.18  # linear RGB of the mid grey around which the two scales are matched
 
 CHROMA_SCALES = ("fixed", "rnl")
 
@@ -216,14 +209,6 @@ def chroma_directions(m_animal: np.ndarray) -> np.ndarray:
     return basis @ np.linalg.solve(m_animal @ basis, units)
 
 
-def srgb_linear_to_lab(rgb: np.ndarray) -> np.ndarray:
-    """CIELAB (D65) of linear sRGB colours along the last axis."""
-    xyz = rgb @ np.array([[0.4124, 0.3576, 0.1805], [0.2126, 0.7152, 0.0722], [0.0193, 0.1192, 0.9505]]).T
-    t = xyz / np.array([0.95047, 1.0, 1.08883])
-    f = np.where(t > (6 / 29) ** 3, np.cbrt(t), t / (3 * (6 / 29) ** 2) + 4 / 29)
-    return np.stack([116 * f[..., 1] - 16, 500 * (f[..., 0] - f[..., 1]), 200 * (f[..., 1] - f[..., 2])], axis=-1)
-
-
 def s_cone_fraction(species: str) -> tuple[float, bool]:
     """The S-cone share the RNL scale uses, and whether it was measured."""
     low, high = S_CONE_FRACTION.get(species, ASSUMED_S_CONE_FRACTION)
@@ -243,34 +228,41 @@ def symmetric_power(matrix: np.ndarray, power: float) -> np.ndarray:
     return (vectors * values**power) @ vectors.T
 
 
+def rnl_metric(species: str, cone_matrix_rgb: np.ndarray) -> np.ndarray:
+    """RNL discrimination of small cone contrasts around grey, as a quadratic form.
+
+    For cone contrasts f the squared distance in JNDs is f' P' (P E P')^-1 P f
+    (Vorobyev & Osorio 1998), with P taking f to the differences f_i - f_L and E the
+    squared noise of each cone, e_i = w / sqrt(n_i / n_max). The Weber fraction w is
+    left at 1: it scales animal and human alike, so it cancels in rnl_chroma_matrix.
+    Given the cone matrix, the form is returned in the coordinates it takes.
+    """
+    n = len(cone_matrix_rgb)
+    shares = cone_shares(species)
+    noise = 1 / np.sqrt(shares / shares.max())
+    to_chroma = np.hstack([np.eye(n - 1), -np.ones((n - 1, 1))])
+    return cone_matrix_rgb.T @ to_chroma.T @ np.linalg.inv(to_chroma @ np.diag(noise**2) @ to_chroma.T) @ to_chroma @ cone_matrix_rgb
+
+
 def rnl_chroma_matrix(params: Params) -> np.ndarray:
     """K: how the "rnl" scale remaps the chromatic coordinates c = (q_i - q_L) of the fixed output.
 
     The fixed output is x' = q_L w + U c, with w the white and U = chroma_directions.
-    Around mid grey g, both observers see a small c as a distance in JNDs:
-    - the animal, by the RNL model (Vorobyev & Osorio 1998): c' A c with
-      A = (P E P^T)^-1 / g^2, P taking cone log contrasts to c and E the squared noise
-      of each cone, e_i = WEBER_FRACTION / sqrt(n_i / n_max);
-    - the human, through CIELAB: (U c)' H (U c) with H = J' J / HUMAN_JND_DELTA_E^2.
+    Both observers judge a small c by the RNL model around grey: the animal in its own
+    cone coordinates, c' A c, and a human looking at the output, (U c)' H (U c).
     Replacing U c by U K c with K' B K = A (B = U' H U) makes the two agree. Of all such
     K this is the one that is self-adjoint in the B metric, so it rescales the axes
-    without rotating hues; for a dichromat it is the single factor sqrt(A / B).
+    without rotating hues; for a dichromat it is the single factor sqrt(A / B), and for
+    a human it is the identity.
     """
     m_animal = animal_cone_matrix(params)
     n = len(m_animal)
     if n == 1:
         return np.zeros((0, 0))  # a monochromat has no chromatic axis to scale
-    shares = cone_shares(params.species)
-    noise = WEBER_FRACTION / np.sqrt(shares / shares.max())
-    to_chroma = np.hstack([np.eye(n - 1), -np.ones((n - 1, 1))])
-    animal = np.linalg.inv(to_chroma @ np.diag(noise**2) @ to_chroma.T) / REFERENCE_GREY**2
-    grey, step = np.full(3, REFERENCE_GREY), 1e-4
-    jacobian = np.stack(
-        [(srgb_linear_to_lab(grey + step * e) - srgb_linear_to_lab(grey - step * e)) / (2 * step) for e in np.eye(3)],
-        axis=1,
-    )
+    # U c changes the cones by (c, 0): L stays, so c' A c is the form's leading block.
+    animal = rnl_metric(params.species, np.eye(n))[:-1, :-1]
     u = chroma_directions(m_animal)
-    human = u.T @ (jacobian.T @ jacobian / HUMAN_JND_DELTA_E**2) @ u
+    human = u.T @ rnl_metric("human", animal_cone_matrix(Params("human"))) @ u
     half, inverse_half = symmetric_power(human, 0.5), symmetric_power(human, -0.5)
     return inverse_half @ symmetric_power(half @ animal @ half, 0.5) @ inverse_half
 
@@ -372,7 +364,7 @@ def chroma_note(species: str) -> str:
     cones = f"S cones {fraction:.0%} ({'measured' if measured else 'assumed'})"
     if n == 3:
         cones += f", L:M {ASSUMED_L_TO_M:g} (assumed)"
-    return f"{gains} of fixed, {cones}, Weber fraction {WEBER_FRACTION} (assumed)"
+    return f"{gains} of fixed, {cones}"
 
 
 def mean_linear_rgb(frame_bgr: np.ndarray) -> np.ndarray:

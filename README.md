@@ -112,8 +112,8 @@ Notes on the human and primate rows:
   M cone is shifted 10 nm towards the other.
   Machado, Oliveira & Fernandes (2009) model severity the same way, with a 20 nm shift standing for
   dichromacy.
-- `human` is normal colour vision. Its `fixed` image is the original, and its `rnl` image is a check
-  on the RNL scale: see [the caveat](#caveat-the-absolute-level-rests-on-an-assumed-noise).
+- `human` is normal colour vision, and the reference the [`rnl` scale](#colour-saturation) measures
+  every other species against, so both its images are the original.
 - `marmoset-female` is a female with the 543 nm and 563 nm variants of the M/L pigment; males, and
   females with two copies of one variant, are dichromats.
 - Every trichromat is given one L cone per M cone. Humans with normal colour vision range from about
@@ -152,29 +152,28 @@ scale. `--chroma-scale` picks one of two:
 A dichromat has one colour axis, blue–yellow. A trichromat has two, and for it `fixed` leaves the
 image as it is, since nothing merges: `rnl` is the only way it looks different.
 
-`rnl` matches two models of a just-noticeable difference (JND) around a mid grey:
+`rnl` counts just-noticeable differences (JNDs) the same way for the animal and for a human:
 
-- **The animal's** comes from the receptor noise limited (RNL) model of Vorobyev & Osorio (1998).
-  It needs each cone's noise, derived from a Weber fraction and the ratio of S to L cones.
-- **The human's** comes from CIELAB, where one JND is about ΔE\*ab 2.3 (Mahy et al. 1994).
-- The ratio of the two multiplies the chromatic part of the output; the lightness is untouched.
+- **Both are judged by the receptor noise limited (RNL) model** of Vorobyev & Osorio (1998), around
+  grey.
+  It turns each cone's noise, set by the share of cones of that class, into a JND.
+- **The human is a normal trichromat** looking at the output, with the `human` row's cones and
+  shares.
+- **The output is rescaled until the two counts agree.** The lightness is untouched.
   A trichromat gets one factor per axis, chosen so that hues are rescaled but not rotated.
   `--info` and the window show the factors for the species chosen.
+- **`human` therefore comes out exactly as the original**, and an animal shows how its
+  discrimination compares with ours: below 1 it tells colours apart worse, above 1 better.
 
-### Caveat: the absolute level rests on an assumed noise
+### Caveat: the animal's cones are assumed to be as noisy as ours
 
-- **The Weber fraction is 0.05 for every species.**
-  It is measured for almost no mammal, and 0.05 is the value the literature uses when it is
-  unknown ([micaToolbox notes](https://www.empiricalimaging.com/knowledge-base/cone-ratios/)).
-  The factor is inversely proportional to it, so a true value of 0.02 would make every species
-  2.5 times more saturated.
-  Comparisons between species are therefore firmer than any one species' level.
-- **The `human` preset shows how far off the level is.** Normal human vision matched against itself
-  should come out unchanged, with both factors at 1; `--info --species human` shows how far below 1
-  they are.
-- **Some S-cone shares are assumed**, marked with a star in the [species table](#species).
+- **RNL needs each cone's noise as a Weber fraction**, and that is measured for almost no mammal.
+  Taking the same value for animal and human makes it cancel, so none has to be chosen; the
+  assumption is that it is the same.
+- **Some S-cone shares are assumed**, marked with a star in the [species table](#species), and every
+  trichromat's L:M ratio is.
 - **RNL is a threshold model.** It is matched near grey; strongly saturated colours are
-  extrapolated, and the human JND of 2.3 itself varies widely across CIELAB.
+  extrapolated.
 - **Monochromats** have no chromatic axis, so both scales give the same grey image.
 
 ## What it cannot show
@@ -247,8 +246,6 @@ image as it is, since nothing merges: `rnl` is the only way it looks different.
   experimentally detached cat retina. *J. Comp. Neurol.* 430.
 - Machado, G. M., Oliveira, M. M. & Fernandes, L. A. F. (2009). A physiologically-based model for
   simulation of color vision deficiency. *IEEE Trans. Vis. Comput. Graph.* 15.
-- Mahy, M., Van Eycken, L. & Oosterlinck, A. (1994). Evaluation of uniform color spaces developed
-  after the adoption of CIELAB and CIELUV. *Color Research & Application* 19, 105–121.
 - Mowat, F. M. et al. (2008). Topographical characterization of cone photoreceptors and the area
   centralis of the canine retina. *Molecular Vision* 14.
 - Neitz, J., Geist, T. & Jacobs, G. H. (1989). Color vision in the dog. *Visual Neuroscience* 3,
