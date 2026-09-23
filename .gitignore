@@ -2,3 +2,5 @@ __pycache__/
 # Output of the tool itself: snapshots and converted photos
 dog-*.png
 *.dog.png
+# Local Claude Code state, e.g. plugin settings and locks
+.claude/
