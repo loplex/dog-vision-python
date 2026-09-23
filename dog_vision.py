@@ -33,8 +33,9 @@ Usage:
     uv run dog_vision.py --info          # print the derived model and checks
     uv run dog_vision.py --species cat   # another dichromat
 
-Keys in the live window: m = toggle side-by-side / simulation only, s = save
-snapshot, q or Esc = quit.
+In the live window, click a species in the list on the right or use the up
+and down arrow keys. Other keys: m = toggle side-by-side / simulation only,
+r = reset to the command-line values, s = save snapshot, q or Esc = quit.
 """
 
 import argparse
@@ -257,30 +258,123 @@ def use_system_fonts() -> None:
         os.environ["QT_QPA_FONTDIR"] = str(Path(font).parent)
 
 
-def run_camera(index: int, params: Params) -> None:
+PERCENT_SLIDERS = {"Adaptation to scene [%]": "adaptation", "Simulation strength [%]": "strength"}
+
+# Arrow key codes returned by cv2.waitKeyEx: X11 keysyms (Linux) and Win32 codes.
+UP_KEYS = {65362, 2490368}
+DOWN_KEYS = {65364, 2621440}
+
+PANEL_WIDTH = 230
+PANEL_MARGIN = 10
+
+
+def create_sliders(window: str, params: Params) -> None:
+    for label in PERCENT_SLIDERS:
+        cv2.createTrackbar(label, window, 0, 100, lambda _: None)
+    set_sliders(window, params)
+
+
+def set_sliders(window: str, params: Params) -> None:
+    for label, field in PERCENT_SLIDERS.items():
+        cv2.setTrackbarPos(label, window, round(getattr(params, field) * 100))
+
+
+def read_sliders(window: str, species: str) -> Params:
+    percents = {field: cv2.getTrackbarPos(label, window) / 100 for label, field in PERCENT_SLIDERS.items()}
+    return Params(species, **percents)
+
+
+def panel_row_height(height: int) -> int:
+    return max(12, min(26, (height - 2 * PANEL_MARGIN) // len(SPECIES)))
+
+
+def species_at(y: int, height: int) -> str | None:
+    """The species listed at row y of the panel, or None between or below the rows."""
+    row = (y - PANEL_MARGIN) // panel_row_height(height)
+    return list(SPECIES)[row] if y >= PANEL_MARGIN and row < len(SPECIES) else None
+
+
+def draw_species_panel(height: int, selected: str) -> np.ndarray:
+    panel = np.full((height, PANEL_WIDTH, 3), 40, dtype=np.uint8)
+    row_height = panel_row_height(height)
+    for i, name in enumerate(SPECIES):
+        top = PANEL_MARGIN + i * row_height
+        if name == selected:
+            cv2.rectangle(panel, (4, top), (PANEL_WIDTH - 5, top + row_height - 2), (110, 110, 110), -1)
+        colour = (255, 255, 255) if name == selected else (190, 190, 190)
+        baseline = top + round(row_height * 0.72)
+        cv2.putText(panel, name, (12, baseline), cv2.FONT_HERSHEY_SIMPLEX, row_height / 45, colour, 1, cv2.LINE_AA)
+    return panel
+
+
+def compose_view(images: np.ndarray, species: str, size: tuple[int, int]) -> np.ndarray:
+    """Lay the images and the species panel out at exactly the window's pixel size.
+
+    Qt scales whatever it is given with nearest-neighbour sampling, which makes text
+    ragged, so the images are resized here with smoothing and the panel text is drawn
+    at its final resolution.
+    """
+    width, height = size
+    if width <= PANEL_WIDTH or height <= 0:  # window not laid out yet
+        width, height = images.shape[1] + PANEL_WIDTH, images.shape[0]
+    view = np.full((height, width, 3), 40, dtype=np.uint8)
+    scale = min((width - PANEL_WIDTH) / images.shape[1], height / images.shape[0])
+    fitted_size = (max(1, round(images.shape[1] * scale)), max(1, round(images.shape[0] * scale)))
+    fitted = cv2.resize(images, fitted_size, interpolation=cv2.INTER_AREA if scale < 1 else cv2.INTER_LINEAR)
+    top = (height - fitted.shape[0]) // 2
+    view[top : top + fitted.shape[0], : fitted.shape[1]] = fitted
+    view[:, width - PANEL_WIDTH :] = draw_species_panel(height, species)
+    return view
+
+
+def run_camera(index: int, initial: Params) -> None:
     cap = cv2.VideoCapture(index)
     if not cap.isOpened():
         sys.exit(f"Cannot open camera {index}")
-    window = "Dog vision (m = mode, s = snapshot, q = quit)"
+    window = "Dog vision (m = mode, r = reset, s = snapshot, q = quit)"
     use_system_fonts()
-    cv2.namedWindow(window, cv2.WINDOW_NORMAL)
+    # FREERATIO: Qt must not letterbox, so the view's size is the window's size.
+    cv2.namedWindow(window, cv2.WINDOW_NORMAL | cv2.WINDOW_FREERATIO)
+    create_sliders(window, initial)
+    names = list(SPECIES)
+    # Written by the mouse callback; panel_x is where the species panel starts in the view.
+    state = {"species": initial.species, "panel_x": 0, "height": 1}
+
+    def on_mouse(event: int, x: int, y: int, _flags: int, _param: object) -> None:
+        if event == cv2.EVENT_LBUTTONDOWN and x >= state["panel_x"]:
+            state["species"] = species_at(y, state["height"]) or state["species"]
+
+    cv2.setMouseCallback(window, on_mouse)
     side_by_side = True
+    first_frame = True
     try:
         while True:
             ok, frame = cap.read()
             if not ok:
                 sys.exit("Camera stopped delivering frames")
+            params = read_sliders(window, state["species"])
             simulated = simulate(frame, params)
-            view = np.hstack([frame, simulated]) if side_by_side else simulated
+            images = np.hstack([frame, simulated]) if side_by_side else simulated
+            if first_frame:  # WINDOW_NORMAL opens small; start at the image's own size
+                cv2.resizeWindow(window, images.shape[1] + PANEL_WIDTH, images.shape[0])
+                first_frame = False
+            view = compose_view(images, params.species, cv2.getWindowImageRect(window)[2:])
+            state["panel_x"], state["height"] = view.shape[1] - PANEL_WIDTH, view.shape[0]
             cv2.imshow(window, view)
-            key = cv2.waitKey(1) & 0xFF
+            key = cv2.waitKeyEx(1)
             if key in (ord("q"), 27) or cv2.getWindowProperty(window, cv2.WND_PROP_VISIBLE) < 1:
                 break
-            if key == ord("m"):
+            if key in UP_KEYS or key in DOWN_KEYS:
+                step = -1 if key in UP_KEYS else 1
+                state["species"] = names[(names.index(state["species"]) + step) % len(names)]
+            elif key == ord("m"):
                 side_by_side = not side_by_side
+            elif key == ord("r"):
+                set_sliders(window, initial)
+                state["species"] = initial.species
             elif key == ord("s"):
-                name = f"dog-{time.strftime('%Y%m%d-%H%M%S')}.png"
-                cv2.imwrite(name, view)
+                name = f"dog-{params.species}-{time.strftime('%Y%m%d-%H%M%S')}.png"
+                cv2.imwrite(name, images)
                 print(f"Saved {name}")
     finally:
         cap.release()
