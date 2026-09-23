@@ -15,8 +15,10 @@
 
 The script declares its dependencies inline ([PEP 723](https://peps.python.org/pep-0723/)), so
 [uv](https://docs.astral.sh/uv/) is the only thing to install.
-The window uses Tkinter, which the Python builds uv installs include; a distribution's own Python
-may need its Tk package (`python3-tk` on Debian and Ubuntu).
+The window uses Tkinter.
+The script asks uv for a Python already on the system, because the Tk in uv's own Python builds
+lacks Xft and draws text without antialiasing; the window warns when that is the Tk it got.
+A distribution's Python may need its Tk package (`python3-tk` on Debian and Ubuntu).
 
 ```sh
 uv run dog_vision.py                     # live camera 0, as a dog

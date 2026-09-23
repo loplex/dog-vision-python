@@ -1,6 +1,10 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = ["numpy", "opencv-python-headless"]
+#
+# [tool.uv]
+# # uv's own Python builds ship a Tk without Xft, which draws text unantialiased.
+# python-preference = "system"
 # ///
 """Simulate dichromatic dog colour vision on a live camera feed or a photo.
 

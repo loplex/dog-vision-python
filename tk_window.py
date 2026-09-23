@@ -7,6 +7,7 @@ is a module with the same run(session) function.
 
 from __future__ import annotations
 
+import sys
 import tkinter as tk
 from tkinter import ttk
 from typing import TYPE_CHECKING
@@ -31,9 +32,24 @@ def to_photo(rgb: np.ndarray, width: int, height: int) -> tk.PhotoImage:
     return tk.PhotoImage(data=header + np.ascontiguousarray(rgb).tobytes(), format="ppm")
 
 
+def warn_without_xft(root: tk.Tk) -> None:
+    """Tk on X11 built without Xft draws text with unantialiased bitmap fonts."""
+    try:
+        font_system = root.tk.call("::tk::pkgconfig", "get", "fontsystem")
+    except tk.TclError:
+        return
+    if root.tk.call("tk", "windowingsystem") == "x11" and font_system != "xft":
+        print(
+            "This Python's Tk has no Xft, so text is drawn without antialiasing;"
+            " run it with a Python whose Tk has Xft, e.g. uv run --python /usr/bin/python3 dog_vision.py",
+            file=sys.stderr,
+        )
+
+
 def run(session: LiveSession) -> None:
     root = tk.Tk()
     root.title("Dog vision")
+    warn_without_xft(root)
     root.columnconfigure(0, weight=1)
     root.rowconfigure(0, weight=1)
 
