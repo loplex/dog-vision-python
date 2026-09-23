@@ -44,6 +44,7 @@ The image follows the window's size; the controls keep theirs.
 | Control                         | Does                                                |
 |---------------------------------|-----------------------------------------------------|
 | *Species* list                  | a click or the arrow keys pick the animal           |
+| *Selected species* panel        | its cones, their sources and its RNL factors        |
 | mouse wheel over the list       | scrolls it                                          |
 | *Adaptation to scene* slider    | same as `--adaptation`, in percent                  |
 | *Simulation strength* slider    | same as `--strength`, in percent                    |
@@ -62,8 +63,9 @@ Everything else sits in `LiveSession` in [`dog_vision.py`](dog_vision.py):
 - `render()` returns the current view as an RGB array, or `None` before the first frame.
   The camera is read on a thread of its own, so a GUI can call it from any timer.
 - `params` (species, adaptation, strength) and `side_by_side` are plain attributes to set.
-- `species_names` and `chroma_scales` list the choices in display order.
-- `chroma_note()` describes what the RNL scale does for the current species.
+- `species_names` and `chroma_scales` list the choices in display order; `species_labels` adds
+  each species' kind of colour vision to its name.
+- `species_facts()` returns what is known about the current species as (label, value) rows.
 - `reset()`, `save_snapshot()` and `error` cover the buttons and a camera that stops.
 
 A window in another toolkit is a module with the same `run(session)` function; `main()` in
