@@ -79,12 +79,24 @@ def run(session: LiveSession) -> None:
     species.configure(yscrollcommand=on_list_scroll)
     species.insert("end", *session.species_names)
 
-    sliders: dict[str, tk.Scale] = {}
+    sliders: dict[str, tuple[ttk.Scale, ttk.Label]] = {}
     for row, (field, label) in enumerate(PERCENT_SLIDERS.items(), start=2):
-        slider = tk.Scale(side, label=label, from_=0, to=100, orient="horizontal", length=200)
-        slider.configure(command=lambda value, field=field: setattr(session.params, field, int(value) / 100))
-        slider.grid(row=row, column=0, sticky="ew")
-        sliders[field] = slider
+        # Label and value share the line above their slider, so each group reads as one.
+        group = ttk.Frame(side)
+        group.grid(row=row, column=0, sticky="ew", pady=(8, 0))
+        group.columnconfigure(0, weight=1)
+        ttk.Label(group, text=label).grid(row=0, column=0, sticky="w")
+        value = ttk.Label(group, width=4, anchor="e")
+        value.grid(row=0, column=1, sticky="e")
+
+        def on_slide(position: str, field: str = field, value: ttk.Label = value) -> None:
+            percent = round(float(position))
+            value.configure(text=str(percent))
+            setattr(session.params, field, percent / 100)
+
+        slider = ttk.Scale(group, from_=0, to=100, orient="horizontal", command=on_slide)
+        slider.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(2, 0))
+        sliders[field] = (slider, value)
 
     chroma = ttk.LabelFrame(side, text="Colour saturation", padding=(8, 4))
     chroma.grid(row=4, column=0, sticky="ew", pady=(10, 0))
@@ -118,8 +130,10 @@ def run(session: LiveSession) -> None:
         species.selection_set(index)
         species.activate(index)
         species.see(index)
-        for field, slider in sliders.items():
-            slider.set(round(getattr(session.params, field) * 100))
+        for field, (slider, value) in sliders.items():
+            percent = round(getattr(session.params, field) * 100)
+            slider.set(percent)
+            value.configure(text=str(percent))
         chroma_scale.set(session.params.chroma_scale)
         note.configure(text=f"RNL: {session.chroma_note()}")
 
