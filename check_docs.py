@@ -7,6 +7,7 @@
 - The species table lists exactly SPECIES, in order, with the same peaks, S-cone shares and sources.
 - Every relative link points at an existing file, and every #anchor at a heading.
 - The neutral points quoted under "What it cannot show" still hold for the model.
+- docs/species-grid.png is what render_species_grid.py renders from the current code.
 
 External URLs are not fetched. Exits non-zero and names each mismatch.
 """
@@ -16,6 +17,7 @@ import sys
 from pathlib import Path
 
 import dog_vision as dv
+import render_species_grid
 
 ROOT = Path(__file__).parent
 
@@ -89,6 +91,8 @@ def check_neutral_points() -> list[str]:
 def main() -> int:
     readme = ROOT / "README.md"
     errors = check_species_table(readme.read_text()) + check_links(readme) + check_neutral_points()
+    if not render_species_grid.matches_file():
+        errors.append("docs/species-grid.png is out of date; run: uv run render_species_grid.py")
     for error in errors:
         print(error, file=sys.stderr)
     print(f"{len(errors)} problem(s)" if errors else "README.md matches the code")

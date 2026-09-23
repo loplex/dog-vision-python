@@ -5,7 +5,7 @@
 - [Running it](#running-it) — camera, photo, `--species`, `--adaptation`, `--strength`, `--chroma-scale`.
 - [The camera window](#the-camera-window) — the species list, sliders and keys.
 - [Another GUI toolkit](#another-gui-toolkit) — `LiveSession` and `run(session)`.
-- [Species](#species) — every preset, with its cone peaks and source.
+- [Species](#species) — every preset, with its cone peaks and source, and how each sees a test chart.
 - [How it works](#how-it-works) — the model in five steps.
 - [Colour saturation](#colour-saturation) — `fixed` or `rnl`, and what the second rests on.
 - [What it cannot show](#what-it-cannot-show) — limits, grouped by whether they can be lifted.
@@ -121,6 +121,26 @@ Notes on the human and primate rows:
 - Every trichromat is given one L cone per M cone. Humans with normal colour vision range from about
   twice as many L as M cones to the reverse (Roorda & Williams 1999).
 
+### How each species sees a test chart
+
+![A hue sweep and eight colour patches as every species sees them, with both colour
+saturation scales](docs/species-grid.png)
+
+[`render_species_grid.py`](render_species_grid.py) draws this image from the code, and
+`check_docs.py` fails when it is out of date.
+
+### Why most mammals look alike
+
+- **They share the same two cone genes.** Every dichromatic mammal here inherited one S and one L
+  pigment from a common ancestor; species differ only in how those are tuned, by a few tens of
+  nanometres at most.
+- **Cone sensitivities are broad**, about 100 nm wide at half height, so a shift of 10 nm changes
+  little.
+- **The visible differences are small but real:** reds are darker for an L cone at shorter
+  wavelengths (horse, ground squirrel), and the hue a species sees as white moves along the sweep.
+- **The large steps are between kinds of colour vision** — trichromat, dichromat, monochromat — not
+  between species of one kind.
+
 ## How it works
 
 The method is the one Brettel, Viénot & Mollon (1997) use for human dichromats:
@@ -208,7 +228,8 @@ image as it is, since nothing merges: `rnl` is the only way it looks different.
 - `uv run dog_vision.py --info --species <name>` prints the derived matrices and checks that grey
   is preserved, that the output excites the cones exactly as the input does, and the neutral point.
 - `uv run check_docs.py` checks this README against the code: the species table with its S-cone
-  shares, the relative links and anchors, and the neutral points quoted above.
+  shares and sources, the relative links and anchors, the neutral points quoted above, and that the
+  test-chart image is what the code renders.
 
 ## References
 
