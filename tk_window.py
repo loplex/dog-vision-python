@@ -86,13 +86,28 @@ def run(session: LiveSession) -> None:
         slider.grid(row=row, column=0, sticky="ew")
         sliders[field] = slider
 
+    chroma = ttk.LabelFrame(side, text="Colour saturation", padding=(8, 4))
+    chroma.grid(row=4, column=0, sticky="ew", pady=(10, 0))
+    chroma_scale = tk.StringVar(value=session.params.chroma_scale)
+    chroma_labels = {"fixed": "Fixed by the projection", "rnl": "Matched to discrimination (RNL)"}
+    note = ttk.Label(chroma, text="", wraplength=200, foreground="#555555")
+
+    def on_chroma_scale() -> None:
+        session.params.chroma_scale = chroma_scale.get()
+
+    for value in session.chroma_scales:
+        ttk.Radiobutton(
+            chroma, text=chroma_labels[value], value=value, variable=chroma_scale, command=on_chroma_scale
+        ).pack(anchor="w")
+    note.pack(anchor="w", pady=(4, 0))
+
     side_by_side = tk.BooleanVar(value=session.side_by_side)
     ttk.Checkbutton(
         side,
         text="Side by side (m)",
         variable=side_by_side,
         command=lambda: setattr(session, "side_by_side", side_by_side.get()),
-    ).grid(row=4, column=0, sticky="w", pady=(10, 0))
+    ).grid(row=5, column=0, sticky="w", pady=(10, 0))
 
     status = ttk.Label(side, text="", width=28)
 
@@ -105,6 +120,8 @@ def run(session: LiveSession) -> None:
         species.see(index)
         for field, slider in sliders.items():
             slider.set(round(getattr(session.params, field) * 100))
+        chroma_scale.set(session.params.chroma_scale)
+        note.configure(text=f"RNL: {session.chroma_note()}")
 
     def reset() -> None:
         session.reset()
@@ -119,15 +136,16 @@ def run(session: LiveSession) -> None:
         session.side_by_side = side_by_side.get()
 
     buttons = ttk.Frame(side)
-    buttons.grid(row=5, column=0, sticky="ew", pady=(10, 0))
+    buttons.grid(row=6, column=0, sticky="ew", pady=(10, 0))
     ttk.Button(buttons, text="Reset (r)", command=reset).pack(side="left")
     ttk.Button(buttons, text="Save snapshot (s)", command=save).pack(side="left", padx=(6, 0))
-    status.grid(row=6, column=0, sticky="w", pady=(6, 0))
+    status.grid(row=7, column=0, sticky="w", pady=(6, 0))
 
     def on_select(_event: tk.Event) -> None:
         selection = species.curselection()
         if selection:
             session.params.species = session.species_names[selection[0]]
+            note.configure(text=f"RNL: {session.chroma_note()}")
 
     species.bind("<<ListboxSelect>>", on_select)
     root.bind("<KeyPress-m>", lambda _: toggle_side_by_side())

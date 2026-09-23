@@ -4,7 +4,7 @@
 # ///
 """Check README.md against the code it describes.
 
-- The species table lists exactly SPECIES, in order, with the same peaks.
+- The species table lists exactly SPECIES, in order, with the same peaks and S-cone shares.
 - Every relative link points at an existing file, and every #anchor at a heading.
 - The neutral points quoted under "What it cannot show" still hold for the model.
 
@@ -31,15 +31,29 @@ def without_code_blocks(text: str) -> str:
 
 
 def check_species_table(readme: str) -> list[str]:
-    rows = re.findall(r"^\| `([\w-]+)` +\| ([\d.–]+) +\| ([\d.]+) +\|", readme, flags=re.M)
-    documented = {name: (() if s == "–" else (float(s),)) + (float(l),) for name, s, l in rows}
+    rows = re.findall(r"^\| `([\w-]+)` +\| ([\d.–]+) +\| ([\d.]+) +\|[^|]+\| ([\d–]+ ?\*?|–) +\|", readme, flags=re.M)
+    documented = {name: ((() if s == "–" else (float(s),)) + (float(l),), share.strip()) for name, s, l, share in rows}
     errors = []
     if list(documented) != list(dv.SPECIES):
         errors.append(f"species table lists {list(documented)}, SPECIES has {list(dv.SPECIES)}")
     for name, peaks in dv.SPECIES.items():
-        if name in documented and documented[name] != tuple(peaks):
-            errors.append(f"species table gives {name} {documented[name]}, SPECIES has {peaks}")
+        if name not in documented:
+            continue
+        documented_peaks, share = documented[name]
+        if documented_peaks != tuple(peaks):
+            errors.append(f"species table gives {name} {documented_peaks}, SPECIES has {peaks}")
+        if share != expected_share(name):
+            errors.append(f"species table gives {name} S cones {share!r}, the code has {expected_share(name)!r}")
     return errors
+
+
+def expected_share(name: str) -> str:
+    """The S-cone share cell the table should show for a species, in percent."""
+    if len(dv.SPECIES[name]) != 2:
+        return "–"
+    low, high = dv.S_CONE_FRACTION.get(name, dv.ASSUMED_S_CONE_FRACTION)
+    cell = f"{low * 100:.0f}" if round(low * 100) == round(high * 100) else f"{low * 100:.0f}–{high * 100:.0f}"
+    return cell if name in dv.S_CONE_FRACTION else f"{cell} *"
 
 
 def check_links(path: Path) -> list[str]:

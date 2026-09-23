@@ -25,6 +25,11 @@ Model (after Brettel, Viénot & Mollon 1997):
    monochromat is mapped onto the grey axis instead.
 5. Optionally the cones adapt to the scene (von Kries gains taken from the
    image mean, "grey world"), and the result is blended with the input.
+6. The saturation of a dichromat's colour axis is either left as step 4 gives
+   it ("fixed"), or scaled so that one step the animal can just discriminate is
+   one step a human can ("rnl"): the animal side comes from the receptor noise
+   limited model of Vorobyev & Osorio (1998), the human side from CIELAB, where
+   a just-noticeable difference is about Delta E*ab 2.3 (Mahy et al. 1994).
 
 The whole transform collapses into one 3x3 matrix on linear RGB. Without
 adaptation its rank equals the number of cone types, and the animal's cone
@@ -79,12 +84,38 @@ SPECIES = {
     "bottlenose-dolphin": (524.0,),  # Fasick et al. (1998), L opsin
 }
 
+# Share of S cones among all cones, as the (lowest, highest) reported across the
+# retina; the RNL scale uses the middle of the range. A species missing here
+# gets ASSUMED_S_CONE_FRACTION.
+S_CONE_FRACTION = {
+    "dog": (0.10, 0.18),  # Mowat et al. (2008): area centralis, periphery
+    "cat": (0.10, 0.20),  # Linberg et al. (2001)
+    "horse": (0.10, 0.25),  # Sandmann, Boycott & Peichl (1996)
+    "cow": (0.05, 0.10),  # this and the next two: Schiviz et al. (2008)
+    "sheep": (0.05, 0.10),
+    "pig": (0.05, 0.10),
+    "ground-squirrel": (1 / 15, 1 / 15),  # Kryger et al. (1998): 14 M cones per S cone
+    "ferret": (1 / 15, 1 / 15),  # Calderone & Jacobs (2003): 14 L cones per S cone
+    "protanope": (0.08, 0.12),  # this and the next: Curcio et al. (1991), human retina
+    "deuteranope": (0.08, 0.12),
+}
+ASSUMED_S_CONE_FRACTION = (0.10, 0.10)  # the middle of what the measured species span
+
+# Receptor noise of the L cone as a Weber fraction. It has been measured for almost
+# no mammal, so every species gets the value the literature uses when it is unknown.
+WEBER_FRACTION = 0.05
+HUMAN_JND_DELTA_E = 2.3  # CIELAB Delta E*ab of one just-noticeable difference (Mahy et al. 1994)
+REFERENCE_GREY = 0.18  # linear RGB of the mid grey around which the two scales are matched
+
+CHROMA_SCALES = ("fixed", "rnl")
+
 
 @dataclasses.dataclass
 class Params:
     species: str = "dog"
     adaptation: float = 0.0  # 0 = adapted to daylight, 1 = fully to the scene mean
     strength: float = 1.0  # 0 = original image, 1 = full simulation
+    chroma_scale: str = "fixed"  # one of CHROMA_SCALES
 
     def cones(self) -> tuple[float, ...]:
         return SPECIES[self.species]
@@ -155,18 +186,66 @@ def grey_world_gains(m_animal: np.ndarray, mean_rgb: np.ndarray, adaptation: flo
     return (mean_cones.mean() / mean_cones) ** adaptation
 
 
+def chroma_direction(m_animal: np.ndarray) -> np.ndarray:
+    """The output colour u that raises a dichromat's S excitation by one and leaves L alone."""
+    basis = OUTPUT_BASIS[2]
+    return basis @ np.linalg.solve(m_animal @ basis, np.array([1.0, 0.0]))
+
+
+def srgb_linear_to_lab(rgb: np.ndarray) -> np.ndarray:
+    """CIELAB (D65) of linear sRGB colours along the last axis."""
+    xyz = rgb @ np.array([[0.4124, 0.3576, 0.1805], [0.2126, 0.7152, 0.0722], [0.0193, 0.1192, 0.9505]]).T
+    t = xyz / np.array([0.95047, 1.0, 1.08883])
+    f = np.where(t > (6 / 29) ** 3, np.cbrt(t), t / (3 * (6 / 29) ** 2) + 4 / 29)
+    return np.stack([116 * f[..., 1] - 16, 500 * (f[..., 0] - f[..., 1]), 200 * (f[..., 1] - f[..., 2])], axis=-1)
+
+
+def s_cone_fraction(species: str) -> tuple[float, bool]:
+    """The S-cone share the RNL scale uses, and whether it was measured."""
+    low, high = S_CONE_FRACTION.get(species, ASSUMED_S_CONE_FRACTION)
+    return (low + high) / 2, species in S_CONE_FRACTION
+
+
+def rnl_chroma_gain(params: Params) -> float:
+    """Factor on the fixed chroma that makes one animal JND one human JND, around mid grey.
+
+    Animal: a colour g w + d u (w = white, u = chroma_direction) changes only the S cone,
+    by the log contrast d / g, so its RNL distance from grey is d / (g sqrt(e_S^2 + e_L^2)),
+    with e_L = WEBER_FRACTION and e_S = e_L sqrt(n_L / n_S) from the cone ratio.
+    Human: the same colour lies |dLab/dd| d Delta E*ab from grey, i.e. that over
+    HUMAN_JND_DELTA_E JNDs. The gain equates the two for small d.
+    """
+    m_animal = animal_cone_matrix(params)
+    if len(m_animal) != 2:
+        return 1.0  # a monochromat has no chromatic axis to scale
+    fraction, _ = s_cone_fraction(params.species)
+    e_l = WEBER_FRACTION
+    e_s = WEBER_FRACTION * np.sqrt((1 - fraction) / fraction)
+    animal_jnd_per_unit = 1 / (REFERENCE_GREY * np.hypot(e_s, e_l))
+    u, grey, step = chroma_direction(m_animal), np.full(3, REFERENCE_GREY), 1e-4
+    delta_e_per_unit = np.linalg.norm(srgb_linear_to_lab(grey + step * u) - srgb_linear_to_lab(grey - step * u)) / (2 * step)
+    return float(animal_jnd_per_unit * HUMAN_JND_DELTA_E / delta_e_per_unit)
+
+
 def simulation_matrix(params: Params, mean_rgb: np.ndarray | None = None) -> np.ndarray:
     """The 3x3 linear-RGB transform for the given parameters.
 
     Output colours lie in the subspace spanned by B = OUTPUT_BASIS and produce the
     (adapted) cone excitation of the input: x' = B (M_animal B)^-1 diag(gains) M_animal x.
     With unit gains this is the projection of x along the animal's confusion
-    directions onto that subspace.
+    directions onto that subspace. For a dichromat that equals
+    x' = q_L w + (q_S - q_L) u with w the white and u = chroma_direction, and the "rnl"
+    chroma scale multiplies the second term by rnl_chroma_gain.
     """
     m_animal = animal_cone_matrix(params)
     basis = OUTPUT_BASIS[len(m_animal)]
     gains = np.ones(len(m_animal)) if mean_rgb is None else grey_world_gains(m_animal, mean_rgb, params.adaptation)
-    simulated = basis @ np.linalg.solve(m_animal @ basis, np.diag(gains) @ m_animal)
+    adapted = np.diag(gains) @ m_animal
+    if len(m_animal) == 2 and params.chroma_scale == "rnl":
+        chroma = rnl_chroma_gain(params) * np.outer(chroma_direction(m_animal), adapted[0] - adapted[1])
+        simulated = np.outer(np.ones(3), adapted[1]) + chroma
+    else:
+        simulated = basis @ np.linalg.solve(m_animal @ basis, adapted)
     return (1.0 - params.strength) * np.eye(3) + params.strength * simulated
 
 
@@ -221,9 +300,20 @@ def print_info(params: Params) -> None:
     print("  cone-invariant   max |M_animal @ T - M_animal| =", np.abs(m_animal @ t - m_animal).max())
     if len(m_animal) == 2:
         print(f"  neutral point    {neutral_point(params):.0f} nm")
+    print(f"\nRNL chroma scale: {chroma_note(params.species)}")
     print("\nReference values: the dog's neutral point was measured at about 480 nm")
     print("(Neitz, Geist & Jacobs 1989); a human deuteranope is R' = G' = 0.293 R + 0.707 G")
     print("(Viénot, Brettel & Mollon 1999).")
+
+
+def chroma_note(species: str) -> str:
+    """One line on what the "rnl" chroma scale does for this species, and on what data."""
+    params = Params(species)
+    if len(params.cones()) != 2:
+        return "no chromatic axis to scale (cone monochromat)"
+    fraction, measured = s_cone_fraction(species)
+    source = "measured" if measured else "assumed"
+    return f"x{rnl_chroma_gain(params):.2f} of fixed, S cones {fraction:.0%} ({source}), Weber fraction {WEBER_FRACTION} (assumed)"
 
 
 def mean_linear_rgb(frame_bgr: np.ndarray) -> np.ndarray:
@@ -255,6 +345,7 @@ class LiveSession:
 
     def __init__(self, camera_index: int, initial: Params) -> None:
         self.species_names = list(SPECIES)
+        self.chroma_scales = CHROMA_SCALES
         self.initial = initial
         self.params = dataclasses.replace(initial)
         self.side_by_side = True
@@ -291,6 +382,10 @@ class LiveSession:
     def reset(self) -> None:
         self.params = dataclasses.replace(self.initial)
 
+    def chroma_note(self) -> str:
+        """What the "rnl" chroma scale does for the current species, and on what data."""
+        return chroma_note(self.params.species)
+
     def save_snapshot(self) -> str | None:
         """Write the last rendered view to the working directory and return the file name."""
         if self._last_images is None:
@@ -318,8 +413,15 @@ def main() -> None:
     parser.add_argument(
         "--strength", type=float, default=defaults.strength, help="0 = original, 1 = full simulation (default %(default)s)"
     )
+    parser.add_argument(
+        "--chroma-scale",
+        choices=CHROMA_SCALES,
+        default=defaults.chroma_scale,
+        help="saturation of a dichromat's colour axis: fixed by the projection, or matched"
+        " to the animal's discrimination with the RNL model (default %(default)s)",
+    )
     args = parser.parse_args()
-    params = Params(args.species, args.adaptation, args.strength)
+    params = Params(args.species, args.adaptation, args.strength, args.chroma_scale)
 
     if args.info:
         print_info(params)
