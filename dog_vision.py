@@ -19,10 +19,12 @@ Model (after Brettel, Viénot & Mollon 1997):
    grey axis (so neutral colours stay neutral) and the blue-yellow axis (the
    conventional rendering of a dichromat's single chromatic axis). A cone
    monochromat is mapped onto the grey axis instead.
+5. Optionally the cones adapt to the scene (von Kries gains taken from the
+   image mean, "grey world"), and the result is blended with the input.
 
-The whole transform collapses into one 3x3 matrix on linear RGB. Its rank
-equals the number of cone types, and the animal's cone excitation of every
-output pixel equals that of the input.
+The whole transform collapses into one 3x3 matrix on linear RGB. Without
+adaptation its rank equals the number of cone types, and the animal's cone
+excitation of every output pixel equals that of the input.
 
 Usage:
     uv run dog_vision.py                 # live camera 0
@@ -76,6 +78,8 @@ SPECIES = {
 @dataclasses.dataclass
 class Params:
     species: str = "dog"
+    adaptation: float = 0.0  # 0 = adapted to daylight, 1 = fully to the scene mean
+    strength: float = 1.0  # 0 = original image, 1 = full simulation
 
     def cones(self) -> tuple[float, ...]:
         return SPECIES[self.species]
@@ -140,16 +144,25 @@ def animal_cone_matrix(params: Params) -> np.ndarray:
     return m_animal / m_animal.sum(axis=1, keepdims=True)  # von Kries adaptation to daylight
 
 
-def simulation_matrix(params: Params) -> np.ndarray:
+def grey_world_gains(m_animal: np.ndarray, mean_rgb: np.ndarray, adaptation: float) -> np.ndarray:
+    """Von Kries gains that move the scene mean towards neutral as adaptation goes 0 -> 1."""
+    mean_cones = np.maximum(m_animal @ mean_rgb, 1e-6)
+    return (mean_cones.mean() / mean_cones) ** adaptation
+
+
+def simulation_matrix(params: Params, mean_rgb: np.ndarray | None = None) -> np.ndarray:
     """The 3x3 linear-RGB transform for the given parameters.
 
     Output colours lie in the subspace spanned by B = OUTPUT_BASIS and produce the
-    cone excitation of the input: x' = B (M_animal B)^-1 M_animal x. This is the
-    projection of x along the animal's confusion directions onto that subspace.
+    (adapted) cone excitation of the input: x' = B (M_animal B)^-1 diag(gains) M_animal x.
+    With unit gains this is the projection of x along the animal's confusion
+    directions onto that subspace.
     """
     m_animal = animal_cone_matrix(params)
     basis = OUTPUT_BASIS[len(m_animal)]
-    return basis @ np.linalg.solve(m_animal @ basis, m_animal)
+    gains = np.ones(len(m_animal)) if mean_rgb is None else grey_world_gains(m_animal, mean_rgb, params.adaptation)
+    simulated = basis @ np.linalg.solve(m_animal @ basis, np.diag(gains) @ m_animal)
+    return (1.0 - params.strength) * np.eye(3) + params.strength * simulated
 
 
 def neutral_point(params: Params) -> float:
@@ -188,7 +201,7 @@ def apply_bgr(frame_bgr: np.ndarray, t_rgb: np.ndarray) -> np.ndarray:
 
 def print_info(params: Params) -> None:
     m_animal = animal_cone_matrix(params)
-    t = simulation_matrix(params)
+    t = simulation_matrix(dataclasses.replace(params, strength=1.0))
     np.set_printoptions(precision=4, suppress=True)
     print(f"Species {params.species}, cone peaks {params.cones()} nm")
     print("\nCone matrix M_animal (rows: cones, short to long; columns: linear R, G, B):")
@@ -208,8 +221,14 @@ def print_info(params: Params) -> None:
     print("(Viénot, Brettel & Mollon 1999).")
 
 
+def mean_linear_rgb(frame_bgr: np.ndarray) -> np.ndarray:
+    """Mean linear RGB of an 8-bit BGR image, estimated from every 8th pixel."""
+    return _DECODE[frame_bgr[::8, ::8]].reshape(-1, 3).mean(axis=0)[::-1]
+
+
 def simulate(frame_bgr: np.ndarray, params: Params) -> np.ndarray:
-    return apply_bgr(frame_bgr, simulation_matrix(params))
+    mean_rgb = mean_linear_rgb(frame_bgr) if params.adaptation > 0 else None
+    return apply_bgr(frame_bgr, simulation_matrix(params, mean_rgb))
 
 
 def convert_file(path: Path, params: Params) -> None:
@@ -275,8 +294,14 @@ def main() -> None:
     parser.add_argument("--info", action="store_true", help="print the derived model and exit")
     defaults = Params()
     parser.add_argument("--species", choices=SPECIES, default=defaults.species, help="animal to simulate (default %(default)s)")
+    parser.add_argument(
+        "--adaptation", type=float, default=defaults.adaptation, help="adaptation to the scene mean, 0-1 (default %(default)s)"
+    )
+    parser.add_argument(
+        "--strength", type=float, default=defaults.strength, help="0 = original, 1 = full simulation (default %(default)s)"
+    )
     args = parser.parse_args()
-    params = Params(args.species)
+    params = Params(args.species, args.adaptation, args.strength)
 
     if args.info:
         print_info(params)
