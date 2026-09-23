@@ -31,6 +31,8 @@ snapshot, q or Esc = quit.
 """
 
 import argparse
+import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -156,11 +158,29 @@ def convert_file(path: Path, t: np.ndarray) -> None:
     print(f"Wrote {out_path}")
 
 
+def use_system_fonts() -> None:
+    """Point Qt at a system font directory.
+
+    The opencv-python wheel bundles Qt without any fonts, and importing cv2 sets
+    QT_QPA_FONTDIR to the missing cv2/qt/fonts directory, so toolbar tooltips,
+    trackbar labels and the status bar render blank. An existing directory is kept.
+    """
+    if Path(os.environ.get("QT_QPA_FONTDIR", "")).is_dir():
+        return
+    try:
+        font = subprocess.run(["fc-match", "-f", "%{file}", "sans"], capture_output=True, text=True).stdout
+    except FileNotFoundError:  # no fontconfig, e.g. on Windows
+        return
+    if font and Path(font).is_file():
+        os.environ["QT_QPA_FONTDIR"] = str(Path(font).parent)
+
+
 def run_camera(index: int, t: np.ndarray) -> None:
     cap = cv2.VideoCapture(index)
     if not cap.isOpened():
         sys.exit(f"Cannot open camera {index}")
     window = "Dog vision (m = mode, s = snapshot, q = quit)"
+    use_system_fonts()
     cv2.namedWindow(window, cv2.WINDOW_NORMAL)
     side_by_side = True
     try:
