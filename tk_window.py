@@ -24,6 +24,7 @@ TOOLTIP_DELAY_MS = 500
 TOOLTIP_WIDTH = 380  # pixels a tooltip's text wraps at
 # What the open dialog lists; Tk matches patterns case-sensitively on some systems, so both cases.
 FILE_EXTENSIONS = ["jpg", "jpeg", "png", "bmp", "tif", "tiff", "webp", "mp4", "mov", "m4v", "avi", "mkv", "webm"]
+MIN_LIST_ROWS = 4  # rows of the species list the window keeps, however many sections are open
 PERCENT_SLIDERS = {"adaptation": "Adaptation to scene [%]", "strength": "Simulation strength [%]"}
 
 # What a control does, shown while the pointer rests on it; keyed by the control's own text.
@@ -169,7 +170,8 @@ class Tooltip:
 class Section:
     """A titled part of the controls that a click on its title opens or closes, to keep the panel short."""
 
-    def __init__(self, parent: tk.Misc, title_font: font.Font, is_open: bool) -> None:
+    def __init__(self, parent: tk.Misc, title_font: font.Font, is_open: bool, on_toggle=None) -> None:
+        self.on_toggle = on_toggle  # called after a click opens or closes the section
         self.frame = ttk.Frame(parent)
         self.frame.columnconfigure(0, weight=1)
         header = ttk.Frame(self.frame, cursor="hand2")
@@ -193,11 +195,16 @@ class Section:
         self.body = ttk.Frame(self.frame, padding=(self.size + 6, 4, 0, 0))
         self.body.grid(row=1, column=0, sticky="ew")
         self.body.columnconfigure(0, weight=1)
-        self.is_open = not is_open
-        self.toggle()
+        self.is_open = is_open
+        self._show()
 
     def toggle(self, _event: tk.Event | None = None) -> None:
         self.is_open = not self.is_open
+        self._show()
+        if self.on_toggle is not None:
+            self.on_toggle()
+
+    def _show(self) -> None:
         s = self.size
         corners = (0, s * 0.2, s, s * 0.2, s / 2, s * 0.85) if self.is_open else (s * 0.2, 0, s * 0.85, s / 2, s * 0.2, s)
         self.arrow.delete("all")
@@ -256,7 +263,8 @@ def run(session: LiveSession) -> None:
     caption = ttk.Label(root, anchor="center", padding=(0, 4))
     caption.grid(row=1, column=0, sticky="ew")
     # A status bar across the bottom: what is shown, how a conversion stands, what the last action did.
-    ttk.Separator(root).grid(row=2, column=0, columnspan=2, sticky="ew")
+    status_rule = ttk.Separator(root)
+    status_rule.grid(row=2, column=0, columnspan=2, sticky="ew")
     status_bar = ttk.Frame(root, padding=(8, 3))
     status_bar.grid(row=3, column=0, columnspan=2, sticky="ew")
     source_name = ttk.Label(status_bar)
@@ -289,9 +297,28 @@ def run(session: LiveSession) -> None:
         scrollbar.set(first, last)
 
     species.configure(yscrollcommand=on_list_scroll)
+
+    def keep_selection_in_view(_event: tk.Event) -> None:
+        """The list's height changes as sections open and close; keep the chosen species in it."""
+        selection = species.curselection()
+        if selection:
+            species.see(selection[0])
+
+    species.bind("<Configure>", keep_selection_in_view, add="+")
+
+    def keep_list_rows() -> None:
+        """Keep the window tall enough for MIN_LIST_ROWS of the species list beside the open sections.
+
+        The list is the only part of the panel that stretches, so without a minimum an opened
+        section takes its room until one row is left. Only the panel counts: the images shrink.
+        """
+        root.update_idletasks()
+        row = font.Font(font=species.cget("font")).metrics("linespace")
+        panel = side.winfo_reqheight() - species.winfo_reqheight() + MIN_LIST_ROWS * row
+        root.minsize(1, panel + status_rule.winfo_reqheight() + status_bar.winfo_reqheight())
     species.insert("end", *session.species_labels)
 
-    facts_section = Section(side, section_font, is_open=True)
+    facts_section = Section(side, section_font, is_open=True, on_toggle=keep_list_rows)
     text(facts_section.title, "Selected species")
     facts_section.frame.grid(row=2, column=0, sticky="ew")
     facts_frame = facts_section.body
@@ -306,7 +333,7 @@ def run(session: LiveSession) -> None:
             Tooltip(name, lambda description=description: description)
             ttk.Label(facts_frame, text=value, wraplength=190).grid(row=row, column=1, sticky="w")
 
-    simulation = Section(side, section_font, is_open=True)
+    simulation = Section(side, section_font, is_open=True, on_toggle=keep_list_rows)
     text(simulation.title, "Simulation")
     simulation.frame.grid(row=3, column=0, sticky="ew", pady=(10, 0))
     sliders: dict[str, LabelledSlider] = {}
@@ -333,7 +360,7 @@ def run(session: LiveSession) -> None:
         ).pack(anchor="w")
 
     # A section the command line left at its defaults starts closed.
-    acuity_section = Section(side, section_font, is_open=session.params.acuity)
+    acuity_section = Section(side, section_font, is_open=session.params.acuity, on_toggle=keep_list_rows)
     text(acuity_section.title, "Acuity")
     acuity_section.frame.grid(row=4, column=0, sticky="ew", pady=(10, 0))
     acuity_frame = acuity_section.body
@@ -348,7 +375,7 @@ def run(session: LiveSession) -> None:
     text(field_of_view.label, "Image spans [degrees]")
     field_of_view.frame.grid(row=1, column=0, sticky="ew", pady=(4, 0))
 
-    view_section = Section(side, section_font, is_open=session.compare is not None or session.difference)
+    view_section = Section(side, section_font, is_open=session.compare is not None or session.difference, on_toggle=keep_list_rows)
     text(view_section.title, "View")
     view_section.frame.grid(row=5, column=0, sticky="ew", pady=(10, 0))
     view = view_section.body
@@ -517,6 +544,7 @@ def run(session: LiveSession) -> None:
         root.after(FRAME_INTERVAL_MS, tick)
 
     show_params()
+    keep_list_rows()
     species.focus_set()
     tick()
     root.mainloop()
