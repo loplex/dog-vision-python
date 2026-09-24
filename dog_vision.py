@@ -50,9 +50,9 @@ Usage:
 
 The live window (tk_window.py) lists the species on the right; keys: m = toggle
 side-by-side / simulation only, d = map of differences, o = open a photo or a video,
-r = reset to the command-line values, s = save snapshot, q or Esc = quit. The
-window only drives LiveSession, so another GUI toolkit needs nothing but a module
-with the same run(session) function.
+r = reset to the command-line values, s = save snapshot, F9 = hide or show the
+controls, q or Esc = quit. The window only drives LiveSession, so another GUI
+toolkit needs nothing but a module with the same run(session) function.
 """
 
 import argparse

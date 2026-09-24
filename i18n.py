@@ -39,6 +39,7 @@ CZECH = {
     "Camera": "Kamera",
     "Convert file": "Převést soubor",
     "Quit": "Ukončit",
+    "Side panel": "Boční panel",
     "Open a photo or a video": "Otevřít fotku nebo video",
     "Photos and videos": "Fotky a videa",
     "All files": "Všechny soubory",

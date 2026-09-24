@@ -81,6 +81,7 @@ The images are on the left, with a line under them saying what each shows, and t
 simulation on the right.
 The images follow the window's size; the controls keep theirs, as wide as with every section open,
 so opening or closing one does not resize the images.
+*View › Side panel* or F9 hides the controls, and the images take their room.
 What works on the window as a whole — the source, saving, the language — is in the menu bar, and a
 status bar at the bottom says what is shown, how a conversion stands and what the last action did.
 The controls are grouped into sections, and a click on a section's title opens or closes it.
@@ -108,6 +109,7 @@ facts about the dog and the simulation's controls on the right](docs/window.png)
 | *File › Convert file*           | writes the open file as shown, at full size         |
 | *File › Save snapshot*, `s`     | saves `dog-<species>-<time>.png` in the current dir |
 | *File › Quit*, `q`, Esc         | quits                                               |
+| *View › Side panel*, F9         | hides or shows the controls on the right            |
 | *Language* menu                 | the window's language, starting as the system's     |
 
 Resting the pointer on a label, a box or a button shows what it means, in a few paragraphs.

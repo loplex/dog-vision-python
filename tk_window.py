@@ -450,6 +450,7 @@ def run(session: LiveSession) -> None:
 
     text(ttk.Button(side, command=reset), "Reset (r)").grid(row=6, column=0, sticky="w", pady=(12, 0))
     sections = (facts_section, simulation, acuity_section, view_section)
+    panel_width = 0
 
     def fix_panel_width() -> None:
         """Keep the panel as wide as it is with every section open, for any species.
@@ -457,6 +458,7 @@ def run(session: LiveSession) -> None:
         Grid gives the panel the width its open sections ask for and the images the rest, so
         without this the images would narrow and widen as sections open and close.
         """
+        nonlocal panel_width
         # Each column of the facts as wide as any species needs it, from labels measured but never shown.
         rows = [row for name in session.species_names for row in session.species_facts(name)]
         for column, texts in enumerate(({label for label, _v, _d in rows}, {value for _l, value, _d in rows})):
@@ -469,9 +471,26 @@ def run(session: LiveSession) -> None:
             section.body.grid()
         root.columnconfigure(1, minsize=0)
         root.update_idletasks()
-        root.columnconfigure(1, minsize=side.winfo_reqwidth())
+        panel_width = side.winfo_reqwidth()
         for section in closed:
             section.body.grid_remove()
+        if panel_shown.get():
+            root.columnconfigure(1, minsize=panel_width)
+
+    panel_shown = tk.BooleanVar(value=True)
+
+    def show_panel() -> None:
+        """Hide or show the whole panel; the images take its room."""
+        if panel_shown.get():
+            side.grid()
+            root.columnconfigure(1, minsize=panel_width)
+        else:
+            side.grid_remove()
+            root.columnconfigure(1, minsize=0)
+
+    def toggle_panel() -> None:
+        panel_shown.set(not panel_shown.get())
+        show_panel()
 
     # Menu entries are not widgets, so they are translated again by their place in the menu.
     translated_entries: list[tuple[tk.Menu, int, str]] = []
@@ -507,6 +526,10 @@ def run(session: LiveSession) -> None:
         enable(file_menu, convert, session.source is not None and not session.converting)
         conversion.configure(text=session.conversion_status() or "")
 
+    view_menu = tk.Menu(menu_bar, tearoff=False)
+    entry(menu_bar, "cascade", "View", menu=view_menu)
+    entry(view_menu, "checkbutton", "Side panel", variable=panel_shown, command=show_panel, accelerator="F9")
+
     language = tk.StringVar(value=session.language)
 
     def on_language() -> None:
@@ -540,6 +563,7 @@ def run(session: LiveSession) -> None:
     root.bind("<KeyPress-r>", lambda _: reset())
     root.bind("<KeyPress-s>", lambda _: save())
     root.bind("<KeyPress-o>", lambda _: open_file())
+    root.bind("<F9>", lambda _: toggle_panel())
     root.bind("<KeyPress-q>", lambda _: root.destroy())
     root.bind("<Escape>", lambda _: root.destroy())
 
