@@ -224,7 +224,7 @@ Notes on the human and primate rows:
 ![A hue sweep and eight colour patches as every species sees them, with both colour
 saturation scales](docs/species-grid.png)
 
-[`render_species_grid.py`](render_species_grid.py) draws this image from the code, and
+[`render_species_grid.py`](tools/render_species_grid.py) draws this image from the code, and
 `check_docs.py` fails when it is out of date.
 
 ### Why most mammals look alike
@@ -402,10 +402,10 @@ That catches differences in colour and in sharpness alike.
 
 - `uv run dog-vision --info --species <name>` prints the derived matrices and checks that grey
   is preserved, that the output excites the cones exactly as the input does, and the neutral point.
-- `uv run check_docs.py` checks this README against the code: the species table with its S-cone
+- `uv run tools/check_docs.py` checks this README against the code: the species table with its S-cone
   shares and sources, the relative links and anchors, the neutral points quoted above, and that the
   test chart and the apple figures are what the code renders
-  ([`render_species_grid.py`](render_species_grid.py), [`render_photo_figures.py`](render_photo_figures.py)).
+  ([`render_species_grid.py`](tools/render_species_grid.py), [`render_photo_figures.py`](tools/render_photo_figures.py)).
 - The apple photo is [*Shiny red apples*](https://commons.wikimedia.org/wiki/File:Shiny_red_apples.jpg)
   by Leon Brooks, released into the public domain.
   It also checks that each translation in [`i18n.py`](src/dog_vision/core/i18n.py) names every species and describes

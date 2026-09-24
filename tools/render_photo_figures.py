@@ -4,8 +4,8 @@
 - docs/apples-acuity.png: a sticker on an apple, as sharp as a human and as a dog resolve it.
 - docs/apples-difference.png: a deuteranope's view, a dog's, and the map of where they differ.
 
-    uv run render_photo_figures.py            # write the images
-    uv run render_photo_figures.py --check    # exit 1 if an image is not what the code renders
+    uv run tools/render_photo_figures.py            # write the images
+    uv run tools/render_photo_figures.py --check    # exit 1 if an image is not what the code renders
 
 The photo is "Shiny red apples" by Leon Brooks, released into the public domain:
 https://commons.wikimedia.org/wiki/File:Shiny_red_apples.jpg
@@ -20,7 +20,7 @@ import numpy as np
 
 from dog_vision.core import facts, imaging, model
 
-DOCS = Path(__file__).parent / "docs"
+DOCS = Path(__file__).parent.parent / "docs"
 PHOTO = DOCS / "shiny-red-apples.jpg"
 SHRINK = 8  # the photo is averaged in 8 x 8 blocks, which gives tiles of 320 x 240
 SPECIES_SHOWN = ["dog", "cat", "protanope", "deuteranope", "harbour-seal"]
@@ -108,7 +108,7 @@ def main() -> int:
     if parser.parse_args().check:
         names = stale()
         for name in names:
-            print(f"{name} is out of date; run: uv run render_photo_figures.py", file=sys.stderr)
+            print(f"{name} is out of date; run: uv run tools/render_photo_figures.py", file=sys.stderr)
         return 1 if names else 0
     for name, image in render().items():
         cv2.imwrite(str(DOCS / name), image)

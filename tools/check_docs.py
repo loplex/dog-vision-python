@@ -19,10 +19,11 @@ from pathlib import Path
 
 import render_photo_figures
 import render_species_grid
+
 from dog_vision.core import facts, i18n, model, species
 from dog_vision.gui import tk as tk_gui
 
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).parent.parent
 
 
 def slug(heading: str) -> str:
@@ -145,9 +146,9 @@ def main() -> int:
     text = readme.read_text()
     errors = check_species_table(text) + check_acuity_table(text) + check_links(readme) + check_neutral_points() + check_translations()
     if not render_species_grid.matches_file():
-        errors.append("docs/species-grid.png is out of date; run: uv run render_species_grid.py")
+        errors.append("docs/species-grid.png is out of date; run: uv run tools/render_species_grid.py")
     for name in render_photo_figures.stale():
-        errors.append(f"docs/{name} is out of date; run: uv run render_photo_figures.py")
+        errors.append(f"docs/{name} is out of date; run: uv run tools/render_photo_figures.py")
     for error in errors:
         print(error, file=sys.stderr)
     print(f"{len(errors)} problem(s)" if errors else "README.md matches the code")

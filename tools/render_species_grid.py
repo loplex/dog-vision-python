@@ -1,7 +1,7 @@
 """Render docs/species-grid.png: a hue sweep and eight colour patches, as every species sees them.
 
-    uv run render_species_grid.py            # write the image
-    uv run render_species_grid.py --check    # exit 1 if the image is not what the code renders
+    uv run tools/render_species_grid.py            # write the image
+    uv run tools/render_species_grid.py --check    # exit 1 if the image is not what the code renders
 """
 
 import argparse
@@ -13,7 +13,7 @@ import numpy as np
 
 from dog_vision.core import facts, imaging, model, species
 
-OUTPUT = Path(__file__).parent / "docs" / "species-grid.png"
+OUTPUT = Path(__file__).parent.parent / "docs" / "species-grid.png"
 STRIP_WIDTH = 400
 LABEL_WIDTH = 240
 PATCHES = [(230, 40, 40), (240, 140, 20), (240, 220, 40), (60, 180, 60), (40, 190, 200), (40, 80, 220), (140, 60, 200), (220, 80, 170)]
@@ -59,7 +59,7 @@ def main() -> int:
     if parser.parse_args().check:
         if matches_file():
             return 0
-        print(f"{OUTPUT.name} is out of date; run: uv run render_species_grid.py", file=sys.stderr)
+        print(f"{OUTPUT.name} is out of date; run: uv run tools/render_species_grid.py", file=sys.stderr)
         return 1
     OUTPUT.parent.mkdir(exist_ok=True)
     cv2.imwrite(str(OUTPUT), render())
