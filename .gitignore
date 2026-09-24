@@ -4,3 +4,5 @@ dog-*.png
 *.dog.png
 # Local Claude Code state, e.g. plugin settings and locks
 .claude/
+# JetBrains IDE project settings
+.idea/
