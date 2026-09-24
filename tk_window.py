@@ -19,7 +19,77 @@ if TYPE_CHECKING:
     from dog_vision import LiveSession
 
 FRAME_INTERVAL_MS = 15
+TOOLTIP_DELAY_MS = 500
+TOOLTIP_WIDTH = 380  # pixels a tooltip's text wraps at
 PERCENT_SLIDERS = {"adaptation": "Adaptation to scene [%]", "strength": "Simulation strength [%]"}
+
+# What a control does, shown while the pointer rests on it; keyed by the control's own text.
+DESCRIPTIONS = {
+    "Species": (
+        "The animal to simulate, with its kind of colour vision in brackets."
+        "\n\nMost dichromatic mammals look much alike: they share the same two cone genes, tuned a few tens"
+        " of nanometres apart at most. The large steps are between kinds of colour vision, not between"
+        " species of one kind."
+    ),
+    "Adaptation to scene [%]": (
+        "How far the cones adapt to the scene instead of to daylight."
+        "\n\nAt 0 the eye is adapted to daylight, so a scene lit by a warm sunset looks warm. At 100 each"
+        " cone's signal is scaled so that the scene's average colour becomes neutral, the way an eye that has"
+        " been in that light for a while stops noticing its cast (von Kries adaptation to a \"grey world\")."
+    ),
+    "Simulation strength [%]": (
+        "Blends the simulation with the original image: 0 shows the original, 100 the full simulation."
+        "\n\nIn between, the colours the animal cannot tell apart are only partly merged."
+    ),
+    "Fixed by the projection": (
+        "Colours the animal cannot tell apart are merged, and the rest keep the saturation the projection"
+        " happens to give them."
+        "\n\nThe merging says which colours look alike, but not how vivid the others look: that has no"
+        " natural scale. For a trichromat nothing merges, so this leaves the image as it is."
+    ),
+    "Matched to discrimination (RNL)": (
+        "Saturation is rescaled so that a human looking at the image can tell as many colour steps apart as"
+        " the animal can in the scene. An animal that tells colours apart worse than we do gets paler colours."
+        "\n\nThe steps are counted by the receptor noise limited model, from the share of each kind of cone;"
+        " the factors are under RNL scale in Selected species."
+        "\n\nIt assumes the animal's cones are as noisy as ours, and it is matched near grey, so strongly"
+        " saturated colours are extrapolated."
+    ),
+    "Blur to the species' acuity": (
+        "Removes the detail finer than the species resolves, with a blur matching its measured acuity"
+        " (Acuity in Selected species)."
+        "\n\nThe blur shows only if the image has more pixels per degree than the species resolves. A camera"
+        " image 640 pixels wide spanning 60° has about 11 pixels per degree, so a dog's blur is under half a"
+        " pixel and invisible, while a large photo shows it clearly."
+    ),
+    "Image spans [degrees]": (
+        "How many degrees of view the image spans from left to right. The blur is set per degree, so this"
+        " decides how many pixels wide it is: halving the angle halves the blur."
+        "\n\n60° is typical of a camera. The result is right when the image is seen at that same angle; seen"
+        " smaller, your own acuity blurs it further."
+    ),
+    "Side by side (m)": (
+        "Shows a second image to the left of the simulation: the original, or another species chosen under"
+        " Left image. Unchecked, only the simulation is shown."
+    ),
+    "Left image": (
+        "What the left image shows: the original, or another species rendered with the same settings, so"
+        " that two animals can be compared directly."
+    ),
+    "Map of differences (d)": (
+        "Adds a third image: grey where the left and right images look the same, red where they differ by more"
+        " than one just-noticeable difference, deeper the larger the difference."
+        "\n\nIt compares the two images as a human sees them, in CIELAB, where one just-noticeable difference"
+        " is about ΔE 2.3 (Mahy et al. 1994), so it catches differences in colour and in sharpness alike."
+        "\n\nIt measures the two renderings, each already reduced to what its animal can tell apart. The"
+        " threshold is an average, so the edge of the red region is approximate."
+    ),
+    "Reset (r)": "Returns every control to the values given on the command line.",
+    "Save snapshot (s)": (
+        "Saves the images as shown, at the camera's resolution, as dog-<species>-<time>.png in the current"
+        " directory."
+    ),
+}
 
 
 def to_photo(rgb: np.ndarray, width: int, height: int) -> tk.PhotoImage:
@@ -44,6 +114,57 @@ def warn_without_xft(root: tk.Tk) -> None:
             " run it with a Python whose Tk has Xft, e.g. uv run --python /usr/bin/python3 dog_vision.py",
             file=sys.stderr,
         )
+
+
+class Tooltip:
+    """Text that appears beside the pointer while it rests on a widget."""
+
+    def __init__(self, widget: tk.Misc, text) -> None:
+        self.widget = widget
+        self.text = text  # called on showing, so it gives the current language
+        self.window: tk.Toplevel | None = None
+        self.pending: str | None = None
+        widget.bind("<Enter>", self._schedule, add="+")
+        for event in ("<Leave>", "<ButtonPress>", "<Destroy>"):
+            widget.bind(event, self._hide, add="+")
+
+    def _schedule(self, _event: tk.Event) -> None:
+        self._hide()
+        self.pending = self.widget.after(TOOLTIP_DELAY_MS, self._show)
+
+    def _show(self) -> None:
+        self.pending = None
+        self.window = tk.Toplevel(self.widget)
+        self.window.wm_overrideredirect(True)
+        tk.Label(
+            self.window,
+            text=self.text(),
+            justify="left",
+            wraplength=TOOLTIP_WIDTH,
+            background="#ffffe8",
+            foreground="#202020",
+            relief="solid",
+            borderwidth=1,
+            padx=8,
+            pady=6,
+        ).pack()
+        self.window.update_idletasks()
+        # Beside the pointer, on whichever side has room: the controls sit at the screen's right edge.
+        width, height = self.window.winfo_reqwidth(), self.window.winfo_reqheight()
+        x, y = self.widget.winfo_pointerx() + 16, self.widget.winfo_pointery() + 16
+        if x + width > self.widget.winfo_screenwidth():
+            x -= width + 32
+        if y + height > self.widget.winfo_screenheight():
+            y -= height + 32
+        self.window.wm_geometry(f"+{max(0, x)}+{max(0, y)}")
+
+    def _hide(self, _event: tk.Event | None = None) -> None:
+        if self.pending is not None:
+            self.widget.after_cancel(self.pending)
+            self.pending = None
+        if self.window is not None:
+            self.window.destroy()
+            self.window = None
 
 
 class LabelledSlider:
@@ -80,6 +201,8 @@ def run(session: LiveSession) -> None:
     def text(widget: tk.Misc, english: str) -> tk.Misc:
         widget.configure(text=_(english))
         translated.append((widget, english))
+        if english in DESCRIPTIONS:
+            Tooltip(widget, lambda: _(DESCRIPTIONS[english]))
         return widget
 
     root.title(_("Dog vision"))
@@ -122,8 +245,10 @@ def run(session: LiveSession) -> None:
     def show_facts() -> None:
         for child in facts_frame.winfo_children():
             child.destroy()
-        for row, (label, value) in enumerate(session.species_facts()):
-            ttk.Label(facts_frame, text=label, foreground="#555555").grid(row=row, column=0, sticky="nw", padx=(0, 8))
+        for row, (label, value, description) in enumerate(session.species_facts()):
+            name = ttk.Label(facts_frame, text=label, foreground="#555555")
+            name.grid(row=row, column=0, sticky="nw", padx=(0, 8))
+            Tooltip(name, lambda description=description: description)
             ttk.Label(facts_frame, text=value, wraplength=190).grid(row=row, column=1, sticky="w")
 
     sliders: dict[str, LabelledSlider] = {}

@@ -4,7 +4,7 @@
 
 - [Running it](#running-it) — camera, photo, `--species`, `--compare`, `--difference`, `--adaptation`,
   `--strength`, `--chroma-scale`, `--acuity`, `--fov`.
-- [The camera window](#the-camera-window) — the species list, sliders, keys and language.
+- [The camera window](#the-camera-window) — the species list, sliders, keys, language and tooltips.
 - [Another GUI toolkit](#another-gui-toolkit) — `LiveSession` and `run(session)`.
 - [Species](#species) — every preset, with its cone peaks and source, and how each sees a test chart.
 - [How it works](#how-it-works) — the model in five steps.
@@ -70,6 +70,8 @@ The images follow the window's size; the controls keep theirs.
 | *Language* choice               | the window's language, starting as the system's     |
 | `q`, Esc                        | quits                                               |
 
+Resting the pointer on a label, a box or a button shows what it means, in a few paragraphs.
+
 ### The window starts in the system's language, looked up as gettext does
 
 The window speaks English and Czech.
@@ -101,7 +103,8 @@ Everything else sits in `LiveSession` in [`dog_vision.py`](dog_vision.py):
 - `caption()` says what the rendered view shows, left to right.
 - `species_names` and `chroma_scales` list the choices in display order; `species_labels` adds
   each species' kind of colour vision to its name.
-- `species_facts()` returns what is known about the current species as (label, value) rows.
+- `species_facts()` returns what is known about the current species as (label, value, description)
+  rows.
 - `language` is a code from `languages`, which maps each to the language's own name, and sets
   the language of `species_labels`, `species_facts()` and `caption()`; `translate()` gives the
   window's own texts in it.
