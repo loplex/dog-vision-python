@@ -10,7 +10,7 @@ from __future__ import annotations
 import sys
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, ttk
+from tkinter import filedialog, font, ttk
 from typing import TYPE_CHECKING
 
 import cv2
@@ -166,6 +166,48 @@ class Tooltip:
             self.window = None
 
 
+class Section:
+    """A titled part of the controls that a click on its title opens or closes, to keep the panel short."""
+
+    def __init__(self, parent: tk.Misc, title_font: font.Font, is_open: bool) -> None:
+        self.frame = ttk.Frame(parent)
+        self.frame.columnconfigure(0, weight=1)
+        header = ttk.Frame(self.frame, cursor="hand2")
+        header.grid(row=0, column=0, sticky="ew")
+        # The arrow is drawn, not a character: fonts draw the triangles at unrelated sizes, some as emoji.
+        self.size = round(title_font.metrics("linespace") * 0.6)
+        style = ttk.Style(parent)
+        self.colour = style.lookup("TLabel", "foreground") or "black"
+        self.arrow = tk.Canvas(
+            header,
+            width=self.size,
+            height=self.size,
+            highlightthickness=0,
+            background=style.lookup("TFrame", "background"),
+        )
+        self.arrow.pack(side="left", padx=(0, 6))
+        self.title = ttk.Label(header, font=title_font)
+        self.title.pack(side="left")
+        for widget in (header, self.arrow, self.title):
+            widget.bind("<Button-1>", self.toggle, add="+")
+        self.body = ttk.Frame(self.frame, padding=(self.size + 6, 4, 0, 0))
+        self.body.grid(row=1, column=0, sticky="ew")
+        self.body.columnconfigure(0, weight=1)
+        self.is_open = not is_open
+        self.toggle()
+
+    def toggle(self, _event: tk.Event | None = None) -> None:
+        self.is_open = not self.is_open
+        s = self.size
+        corners = (0, s * 0.2, s, s * 0.2, s / 2, s * 0.85) if self.is_open else (s * 0.2, 0, s * 0.85, s / 2, s * 0.2, s)
+        self.arrow.delete("all")
+        self.arrow.create_polygon(corners, fill=self.colour, outline=self.colour)
+        if self.is_open:
+            self.body.grid()
+        else:
+            self.body.grid_remove()
+
+
 class LabelledSlider:
     """A slider with its label and current value on the line above it, so the three read as one."""
 
@@ -227,6 +269,8 @@ def run(session: LiveSession) -> None:
     side = ttk.Frame(root, padding=10)
     side.grid(row=0, column=1, rowspan=2, sticky="ns")
     side.rowconfigure(1, weight=1)
+    section_font = font.nametofont("TkDefaultFont").copy()
+    section_font.configure(weight="bold")
 
     text(ttk.Label(side), "Species").grid(row=0, column=0, sticky="w")
     list_frame = ttk.Frame(side)
@@ -247,8 +291,10 @@ def run(session: LiveSession) -> None:
     species.configure(yscrollcommand=on_list_scroll)
     species.insert("end", *session.species_labels)
 
-    facts_frame = text(ttk.LabelFrame(side, padding=(8, 4)), "Selected species")
-    facts_frame.grid(row=2, column=0, sticky="ew")
+    facts_section = Section(side, section_font, is_open=True)
+    text(facts_section.title, "Selected species")
+    facts_section.frame.grid(row=2, column=0, sticky="ew")
+    facts_frame = facts_section.body
     facts_frame.columnconfigure(1, weight=1)
 
     def show_facts() -> None:
@@ -260,15 +306,21 @@ def run(session: LiveSession) -> None:
             Tooltip(name, lambda description=description: description)
             ttk.Label(facts_frame, text=value, wraplength=190).grid(row=row, column=1, sticky="w")
 
+    simulation = Section(side, section_font, is_open=True)
+    text(simulation.title, "Simulation")
+    simulation.frame.grid(row=3, column=0, sticky="ew", pady=(10, 0))
     sliders: dict[str, LabelledSlider] = {}
-    for row, (field, label) in enumerate(PERCENT_SLIDERS.items(), start=3):
-        slider = LabelledSlider(side, label, 0, 100, lambda percent, field=field: setattr(session.params, field, percent / 100))
+    for row, (field, label) in enumerate(PERCENT_SLIDERS.items()):
+        slider = LabelledSlider(
+            simulation.body, label, 0, 100, lambda percent, field=field: setattr(session.params, field, percent / 100)
+        )
         text(slider.label, label)
-        slider.frame.grid(row=row, column=0, sticky="ew", pady=(8, 0))
+        slider.frame.grid(row=row, column=0, sticky="ew", pady=(0, 8))
         sliders[field] = slider
 
-    chroma = text(ttk.LabelFrame(side, padding=(8, 4)), "Colour saturation")
-    chroma.grid(row=5, column=0, sticky="ew", pady=(10, 0))
+    text(ttk.Label(simulation.body), "Colour saturation").grid(row=2, column=0, sticky="w")
+    chroma = ttk.Frame(simulation.body, padding=(8, 2, 0, 0))
+    chroma.grid(row=3, column=0, sticky="ew")
     chroma_scale = tk.StringVar(value=session.params.chroma_scale)
     chroma_labels = {"fixed": "Fixed by the projection", "rnl": "Matched to discrimination (RNL)"}
 
@@ -280,9 +332,11 @@ def run(session: LiveSession) -> None:
             ttk.Radiobutton(chroma, value=value, variable=chroma_scale, command=on_chroma_scale), chroma_labels[value]
         ).pack(anchor="w")
 
-    acuity_frame = text(ttk.LabelFrame(side, padding=(8, 4)), "Acuity")
-    acuity_frame.grid(row=6, column=0, sticky="ew", pady=(10, 0))
-    acuity_frame.columnconfigure(0, weight=1)
+    # A section the command line left at its defaults starts closed.
+    acuity_section = Section(side, section_font, is_open=session.params.acuity)
+    text(acuity_section.title, "Acuity")
+    acuity_section.frame.grid(row=4, column=0, sticky="ew", pady=(10, 0))
+    acuity_frame = acuity_section.body
     acuity = tk.BooleanVar(value=session.params.acuity)
     text(
         ttk.Checkbutton(acuity_frame, variable=acuity, command=lambda: setattr(session.params, "acuity", acuity.get())),
@@ -294,8 +348,11 @@ def run(session: LiveSession) -> None:
     text(field_of_view.label, "Image spans [degrees]")
     field_of_view.frame.grid(row=1, column=0, sticky="ew", pady=(4, 0))
 
-    view = text(ttk.LabelFrame(side, padding=(8, 4)), "View")
-    view.grid(row=7, column=0, sticky="ew", pady=(10, 0))
+    view_section = Section(side, section_font, is_open=session.compare is not None or session.difference)
+    text(view_section.title, "View")
+    view_section.frame.grid(row=5, column=0, sticky="ew", pady=(10, 0))
+    view = view_section.body
+    view.columnconfigure(0, weight=0)
     view.columnconfigure(1, weight=1)
     side_by_side = tk.BooleanVar(value=session.side_by_side)
     text(
@@ -362,7 +419,7 @@ def run(session: LiveSession) -> None:
         if not session.open_camera():
             status.configure(text=_("Cannot open camera {index}").format(index=session.camera_index))
 
-    text(ttk.Button(side, command=reset), "Reset (r)").grid(row=8, column=0, sticky="w", pady=(10, 0))
+    text(ttk.Button(side, command=reset), "Reset (r)").grid(row=6, column=0, sticky="w", pady=(12, 0))
 
     # Menu entries are not widgets, so they are translated again by their place in the menu.
     translated_entries: list[tuple[tk.Menu, int, str]] = []

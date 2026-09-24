@@ -17,6 +17,7 @@ CZECH = {
     "Selected species": "Vybraný druh",
     "Adaptation to scene [%]": "Adaptace na scénu [%]",
     "Simulation strength [%]": "Síla simulace [%]",
+    "Simulation": "Simulace",
     "Colour saturation": "Sytost barev",
     "Fixed by the projection": "Daná projekcí",
     "Matched to discrimination (RNL)": "Podle rozlišování (RNL)",

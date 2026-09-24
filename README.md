@@ -78,11 +78,14 @@ simulation on the right.
 The images follow the window's size; the controls keep theirs.
 What works on the window as a whole — the source, saving, the language — is in the menu bar, and a
 status bar at the bottom says what is shown, how a conversion stands and what the last action did.
+The controls are grouped into sections, and a click on a section's title opens or closes it.
+*Acuity* and *View* start closed, unless the command line turned on something in them
+(`--acuity`, `--compare`, `--difference`).
 
 | Control                         | Does                                                |
 |---------------------------------|-----------------------------------------------------|
 | *Species* list                  | a click or the arrow keys pick the animal           |
-| *Selected species* panel        | its cones, their sources and its RNL factors        |
+| *Selected species* section      | its cones, their sources and its RNL factors        |
 | mouse wheel over the list       | scrolls it                                          |
 | *Adaptation to scene* slider    | same as `--adaptation`, in percent                  |
 | *Simulation strength* slider    | same as `--strength`, in percent                    |
