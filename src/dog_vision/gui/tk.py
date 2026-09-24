@@ -28,6 +28,7 @@ MIN_LIST_ROWS = 4  # rows of the species list the panel keeps before it scrolls 
 WHEEL_LINES = 3  # lines of text the panel scrolls by per notch of the mouse wheel
 FACT_WIDTH = 190  # pixels a species fact wraps at
 FACT_GAP = 8  # pixels between a species fact's name and its value
+CAPTION_GAP = 12  # pixels kept free between the captions of two images
 PERCENT_SLIDERS = {"adaptation": "Adaptation to scene [%]", "strength": "Simulation strength [%]"}
 
 # What a control does, shown while the pointer rests on it; keyed by the control's own text.
@@ -263,8 +264,24 @@ def run(session: LiveSession) -> None:
 
     image = tk.Label(root, background="#282828", borderwidth=0, highlightthickness=0)
     image.grid(row=0, column=0, sticky="nsew")
-    caption = ttk.Label(root, anchor="center", padding=(0, 4))
-    caption.grid(row=1, column=0, sticky="ew")
+    # Each image's caption centred under it; placed, since the images' width follows the window.
+    caption_bar = ttk.Frame(root)
+    caption_bar.grid(row=1, column=0, sticky="ew")
+    captions: list[ttk.Label] = []
+
+    def show_captions(texts: list[str], shown_width: int) -> None:
+        """Put texts under the images, left to right; shown_width is the width all of them are drawn at."""
+        while len(captions) < len(texts):
+            captions.append(ttk.Label(caption_bar, anchor="center", justify="center"))
+        for unused in captions[len(texts) :]:
+            unused.place_forget()
+        part = shown_width / len(texts)
+        left = (caption_bar.winfo_width() - shown_width) / 2  # the images are centred
+        for index, (caption, text) in enumerate(zip(captions, texts)):
+            caption.configure(text=text, wraplength=max(1, round(part) - CAPTION_GAP))
+            caption.place(x=round(left + (index + 0.5) * part), y=4, anchor="n")
+        caption_bar.configure(height=max(caption.winfo_reqheight() for caption in captions[: len(texts)]) + 8)
+
     # A status bar across the bottom: what is shown, how a conversion stands, what the last action did.
     status_rule = ttk.Separator(root)
     status_rule.grid(row=2, column=0, columnspan=2, sticky="ew")
@@ -606,7 +623,7 @@ def run(session: LiveSession) -> None:
     root.bind("<Escape>", lambda _: root.destroy())
 
     sized = False
-    shown: tuple | None = None  # the image and label size last drawn, not to draw a still photo again
+    shown: tuple | None = None  # the image, label size and captions last drawn, not to draw a still photo again
 
     def tick() -> None:
         nonlocal sized, shown
@@ -616,12 +633,14 @@ def run(session: LiveSession) -> None:
         show_source()
         rgb = session.render()
         size = (image.winfo_width(), image.winfo_height())
-        if rgb is not None and (shown is None or shown[0] is not rgb or shown[1] != size):
-            shown = (rgb, size)
+        # The captions count too: a change of language changes them, not the image.
+        texts = session.captions()
+        if rgb is not None and (shown is None or shown[0] is not rgb or shown[1:] != (size, texts)):
+            shown = (rgb, size, texts)
             # The first frame is shown at its own size: the empty label is not laid out yet.
             photo = to_photo(rgb, image.winfo_width(), image.winfo_height()) if sized else to_photo(rgb, 0, 0)
             image.configure(image=photo)
-            caption.configure(text=session.caption())
+            show_captions(texts, photo.width())
             image.photo = photo  # Tk drops images that Python no longer references
             if not sized:
                 # The first frame sets the window to its natural size; fixing that geometry

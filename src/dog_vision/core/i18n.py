@@ -55,8 +55,7 @@ CZECH = {
     "{format} ({encoder})": "{format} ({encoder})",
     # Caption
     "original": "originál",
-    "left: {left}    right: {right}": "vlevo: {left}    vpravo: {right}",
-    "    red: noticeably different ({share} of pixels)": "    červeně: znatelně odlišné ({share} pixelů)",
+    "red: noticeably different ({share} of pixels)": "červeně: znatelně odlišné ({share} pixelů)",
     # Species facts
     "{0}%": "{0} %",
     "{0}%–{1}%": "{0}–{1} %",

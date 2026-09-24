@@ -80,8 +80,8 @@ video is encoded with the first of these that works on the machine:
 
 ## The camera window
 
-The images are on the left, with a line under them saying what each shows, and the controls of the
-simulation on the right.
+The images are on the left, each with a line centred under it saying what it shows, and the controls
+of the simulation on the right.
 The images follow the window's size; the controls keep theirs, as wide as with every section open,
 so opening or closing one does not resize the images.
 When the open sections do not fit the window's height, the controls get a scrollbar and the species
@@ -159,13 +159,13 @@ Everything else sits in `LiveSession` in [`session.py`](src/dog_vision/core/sess
 - `params` (species, adaptation, strength, chroma scale, acuity, field of view), `side_by_side`,
   `compare` (the species on the left, or `None` for the original) and `difference` are plain
   attributes to set.
-- `caption()` says what the rendered view shows, left to right.
+- `captions()` says what each image of the rendered view shows, left to right.
 - `species_names` and `chroma_scales` list the choices in display order; `species_labels` adds
   each species' kind of colour vision to its name.
 - `species_facts()` returns what is known about the current species as (label, value, description)
   rows.
 - `language` is a code from `languages`, which maps each to the language's own name, and sets
-  the language of `species_labels`, `species_facts()` and `caption()`; `translate()` gives the
+  the language of `species_labels`, `species_facts()` and `captions()`; `translate()` gives the
   window's own texts in it.
 - `reset()`, `save_snapshot()` and `error` cover the buttons and a camera that stops.
 
@@ -359,7 +359,7 @@ Acuity in cycles per degree, where a measurement was found:
 
 - **Grey** where the left and right images look the same.
 - **Red** where they differ by more than one just-noticeable difference, deeper the larger the
-  difference; the caption gives the share of pixels that do.
+  difference; the map's caption gives the share of pixels that do.
 
 ![The apples as a deuteranope and as a dog see them, and the map marking the red apples, which the
 dog sees in a slightly different shade](docs/apples-difference.png)

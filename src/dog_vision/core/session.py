@@ -164,17 +164,16 @@ class LiveSession:
             return self.translate("Camera {index}").format(index=self.camera_index)
         return self.source.name
 
-    def caption(self) -> str:
-        """What the rendered view shows, left to right."""
+    def captions(self) -> list[str]:
+        """What each image of the rendered view shows, left to right."""
         right = species_label(self.params.species, self.language)
         if not self.side_by_side:
-            return right
+            return [right]
         left = self.translate("original") if self.compare is None else species_label(self.compare, self.language)
-        text = self.translate("left: {left}    right: {right}").format(left=left, right=right)
-        if self._difference_share is not None:
-            share = percent(self._difference_share, self._difference_share, self.language)
-            text += self.translate("    red: noticeably different ({share} of pixels)").format(share=share)
-        return text
+        if self._difference_share is None:
+            return [left, right]
+        share = percent(self._difference_share, self._difference_share, self.language)
+        return [left, right, self.translate("red: noticeably different ({share} of pixels)").format(share=share)]
 
     def reset(self) -> None:
         self.params = dataclasses.replace(self.initial)
