@@ -474,11 +474,18 @@ def run(session: LiveSession) -> None:
     left = ttk.Combobox(view, values=[_("original"), *session.species_labels], state="readonly", width=24)
     left.grid(row=1, column=1, sticky="ew", pady=(4, 0))
 
-    def on_left(_event: tk.Event) -> None:
-        index = left.current()
-        session.compare = None if index == 0 else session.species_names[index - 1]
+    left_index = tk.IntVar()  # the View menu's choice of left image, as the combobox counts
 
-    left.bind("<<ComboboxSelected>>", on_left)
+    def show_compare() -> None:
+        index = 0 if session.compare is None else 1 + session.species_names.index(session.compare)
+        left.current(index)
+        left_index.set(index)
+
+    def set_compare(index: int) -> None:
+        session.compare = None if index == 0 else session.species_names[index - 1]
+        show_compare()
+
+    left.bind("<<ComboboxSelected>>", lambda _event: set_compare(left.current()))
     difference = tk.BooleanVar(value=session.difference)
     text(
         ttk.Checkbutton(view, variable=difference, command=lambda: setattr(session, "difference", difference.get())),
@@ -489,20 +496,31 @@ def run(session: LiveSession) -> None:
         difference.set(not difference.get())
         session.difference = difference.get()
 
-    def show_params() -> None:
-        """Make the widgets reflect session.params."""
+    chosen_species = tk.StringVar()  # the Species menu's choice
+
+    def show_species() -> None:
+        """Make the list, the Species menu and the facts reflect the chosen species."""
         index = session.species_names.index(session.params.species)
         species.selection_clear(0, "end")
         species.selection_set(index)
         species.activate(index)
         species.see(index)
+        chosen_species.set(session.params.species)
+        show_facts()
+
+    def choose_species(name: str) -> None:
+        session.params.species = name
+        show_species()
+
+    def show_params() -> None:
+        """Make the widgets reflect session.params."""
         for field, slider in sliders.items():
             slider.set(round(getattr(session.params, field) * 100))
         acuity.set(session.params.acuity)
-        left.current(0 if session.compare is None else 1 + session.species_names.index(session.compare))
+        show_compare()
         field_of_view.set(round(session.params.field_of_view))
         chroma_scale.set(session.params.chroma_scale)
-        show_facts()
+        show_species()
 
     def reset() -> None:
         session.reset()
@@ -604,9 +622,55 @@ def run(session: LiveSession) -> None:
         enable(file_menu, convert, session.source is not None and not session.converting)
         conversion.configure(text=session.conversion_status() or "")
 
+    # The species and the View section's controls are in the menus too, for when the side panel is hidden;
+    # they share the panel's variables, so either shows what the other set.
+    species_menu = tk.Menu(menu_bar, tearoff=False)
+    entry(menu_bar, "cascade", "Species", menu=species_menu)
     view_menu = tk.Menu(menu_bar, tearoff=False)
     entry(menu_bar, "cascade", "View", menu=view_menu)
     entry(view_menu, "checkbutton", "Side panel", variable=panel_shown, command=show_panel, accelerator="F9")
+    view_menu.add_separator()
+    entry(
+        view_menu,
+        "checkbutton",
+        "Side by side",
+        variable=side_by_side,
+        command=lambda: setattr(session, "side_by_side", side_by_side.get()),
+        accelerator="m",
+    )
+    left_menu = tk.Menu(view_menu, tearoff=False)
+    entry(view_menu, "cascade", "Left image", menu=left_menu)
+    entry(
+        view_menu,
+        "checkbutton",
+        "Map of differences",
+        variable=difference,
+        command=lambda: setattr(session, "difference", difference.get()),
+        accelerator="d",
+    )
+    view_menu.add_separator()
+    entry(
+        view_menu,
+        "checkbutton",
+        "Blur to the species' acuity",
+        variable=acuity,
+        command=lambda: setattr(session.params, "acuity", acuity.get()),
+    )
+
+    def fill_species_menus() -> None:
+        """List the species in the menus, in the current language."""
+        species_menu.delete(0, "end")
+        for name, label in zip(session.species_names, session.species_labels):
+            species_menu.add_radiobutton(
+                label=label, value=name, variable=chosen_species, command=lambda: choose_species(chosen_species.get())
+            )
+        left_menu.delete(0, "end")
+        for index, label in enumerate([_("original"), *session.species_labels]):
+            left_menu.add_radiobutton(
+                label=label, value=index, variable=left_index, command=lambda: set_compare(left_index.get())
+            )
+
+    fill_species_menus()
 
     language = tk.StringVar(value=session.language)
 
@@ -620,6 +684,7 @@ def run(session: LiveSession) -> None:
         species.delete(0, "end")
         species.insert("end", *session.species_labels)
         left.configure(values=[_("original"), *session.species_labels])
+        fill_species_menus()
         status.configure(text="")
         show_params()  # puts back the selections the new items dropped, and the facts
         fix_panel_width()  # the texts have new widths
@@ -632,8 +697,7 @@ def run(session: LiveSession) -> None:
     def on_select(_event: tk.Event) -> None:
         selection = species.curselection()
         if selection:
-            session.params.species = session.species_names[selection[0]]
-            show_facts()
+            choose_species(session.species_names[selection[0]])
 
     species.bind("<<ListboxSelect>>", on_select)
     root.bind("<KeyPress-m>", lambda _: toggle_side_by_side())

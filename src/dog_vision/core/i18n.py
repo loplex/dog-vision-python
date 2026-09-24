@@ -40,6 +40,8 @@ CZECH = {
     "Convert file": "Převést soubor",
     "Quit": "Ukončit",
     "Side panel": "Boční panel",
+    "Side by side": "Vedle sebe",
+    "Map of differences": "Mapa rozdílů",
     "Open a photo or a video": "Otevřít fotku nebo video",
     "Photos and videos": "Fotky a videa",
     "All files": "Všechny soubory",
