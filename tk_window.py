@@ -52,7 +52,8 @@ class LabelledSlider:
     def __init__(self, parent: tk.Misc, label: str, low: int, high: int, on_change) -> None:
         self.frame = ttk.Frame(parent)
         self.frame.columnconfigure(0, weight=1)
-        ttk.Label(self.frame, text=label).grid(row=0, column=0, sticky="w")
+        self.label = ttk.Label(self.frame, text=label)
+        self.label.grid(row=0, column=0, sticky="w")
         self.value = ttk.Label(self.frame, width=4, anchor="e")
         self.value.grid(row=0, column=1, sticky="e")
         self.on_change = on_change
@@ -71,7 +72,17 @@ class LabelledSlider:
 
 def run(session: LiveSession) -> None:
     root = tk.Tk()
-    root.title("Dog vision")
+    _ = session.translate
+    # Every widget whose text is fixed, with that text in English, so a change of
+    # language can translate them all again.
+    translated: list[tuple[tk.Misc, str]] = []
+
+    def text(widget: tk.Misc, english: str) -> tk.Misc:
+        widget.configure(text=_(english))
+        translated.append((widget, english))
+        return widget
+
+    root.title(_("Dog vision"))
     warn_without_xft(root)
     root.columnconfigure(0, weight=1)
     root.rowconfigure(0, weight=1)
@@ -85,7 +96,7 @@ def run(session: LiveSession) -> None:
     side.grid(row=0, column=1, rowspan=2, sticky="ns")
     side.rowconfigure(1, weight=1)
 
-    ttk.Label(side, text="Species").grid(row=0, column=0, sticky="w")
+    text(ttk.Label(side), "Species").grid(row=0, column=0, sticky="w")
     list_frame = ttk.Frame(side)
     list_frame.grid(row=1, column=0, sticky="nsew", pady=(4, 10))
     list_frame.rowconfigure(0, weight=1)
@@ -104,7 +115,7 @@ def run(session: LiveSession) -> None:
     species.configure(yscrollcommand=on_list_scroll)
     species.insert("end", *session.species_labels)
 
-    facts_frame = ttk.LabelFrame(side, text="Selected species", padding=(8, 4))
+    facts_frame = text(ttk.LabelFrame(side, padding=(8, 4)), "Selected species")
     facts_frame.grid(row=2, column=0, sticky="ew")
     facts_frame.columnconfigure(1, weight=1)
 
@@ -118,10 +129,11 @@ def run(session: LiveSession) -> None:
     sliders: dict[str, LabelledSlider] = {}
     for row, (field, label) in enumerate(PERCENT_SLIDERS.items(), start=3):
         slider = LabelledSlider(side, label, 0, 100, lambda percent, field=field: setattr(session.params, field, percent / 100))
+        text(slider.label, label)
         slider.frame.grid(row=row, column=0, sticky="ew", pady=(8, 0))
         sliders[field] = slider
 
-    chroma = ttk.LabelFrame(side, text="Colour saturation", padding=(8, 4))
+    chroma = text(ttk.LabelFrame(side, padding=(8, 4)), "Colour saturation")
     chroma.grid(row=5, column=0, sticky="ew", pady=(10, 0))
     chroma_scale = tk.StringVar(value=session.params.chroma_scale)
     chroma_labels = {"fixed": "Fixed by the projection", "rnl": "Matched to discrimination (RNL)"}
@@ -130,38 +142,34 @@ def run(session: LiveSession) -> None:
         session.params.chroma_scale = chroma_scale.get()
 
     for value in session.chroma_scales:
-        ttk.Radiobutton(
-            chroma, text=chroma_labels[value], value=value, variable=chroma_scale, command=on_chroma_scale
+        text(
+            ttk.Radiobutton(chroma, value=value, variable=chroma_scale, command=on_chroma_scale), chroma_labels[value]
         ).pack(anchor="w")
 
-    acuity_frame = ttk.LabelFrame(side, text="Acuity", padding=(8, 4))
+    acuity_frame = text(ttk.LabelFrame(side, padding=(8, 4)), "Acuity")
     acuity_frame.grid(row=6, column=0, sticky="ew", pady=(10, 0))
     acuity_frame.columnconfigure(0, weight=1)
     acuity = tk.BooleanVar(value=session.params.acuity)
-    ttk.Checkbutton(
-        acuity_frame,
-        text="Blur to the species' acuity",
-        variable=acuity,
-        command=lambda: setattr(session.params, "acuity", acuity.get()),
+    text(
+        ttk.Checkbutton(acuity_frame, variable=acuity, command=lambda: setattr(session.params, "acuity", acuity.get())),
+        "Blur to the species' acuity",
     ).grid(row=0, column=0, sticky="w")
     field_of_view = LabelledSlider(
-        acuity_frame, "Image spans [degrees]", 10, 120, lambda degrees: setattr(session.params, "field_of_view", float(degrees))
+        acuity_frame, "", 10, 120, lambda degrees: setattr(session.params, "field_of_view", float(degrees))
     )
+    text(field_of_view.label, "Image spans [degrees]")
     field_of_view.frame.grid(row=1, column=0, sticky="ew", pady=(4, 0))
 
-    view = ttk.LabelFrame(side, text="View", padding=(8, 4))
+    view = text(ttk.LabelFrame(side, padding=(8, 4)), "View")
     view.grid(row=7, column=0, sticky="ew", pady=(10, 0))
     view.columnconfigure(1, weight=1)
     side_by_side = tk.BooleanVar(value=session.side_by_side)
-    ttk.Checkbutton(
-        view,
-        text="Side by side (m)",
-        variable=side_by_side,
-        command=lambda: setattr(session, "side_by_side", side_by_side.get()),
+    text(
+        ttk.Checkbutton(view, variable=side_by_side, command=lambda: setattr(session, "side_by_side", side_by_side.get())),
+        "Side by side (m)",
     ).grid(row=0, column=0, columnspan=2, sticky="w")
-    ttk.Label(view, text="Left image").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=(4, 0))
-    left_choices = ["original", *session.species_labels]
-    left = ttk.Combobox(view, values=left_choices, state="readonly", width=24)
+    text(ttk.Label(view), "Left image").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=(4, 0))
+    left = ttk.Combobox(view, values=[_("original"), *session.species_labels], state="readonly", width=24)
     left.grid(row=1, column=1, sticky="ew", pady=(4, 0))
 
     def on_left(_event: tk.Event) -> None:
@@ -170,11 +178,9 @@ def run(session: LiveSession) -> None:
 
     left.bind("<<ComboboxSelected>>", on_left)
     difference = tk.BooleanVar(value=session.difference)
-    ttk.Checkbutton(
-        view,
-        text="Map of differences (d)",
-        variable=difference,
-        command=lambda: setattr(session, "difference", difference.get()),
+    text(
+        ttk.Checkbutton(view, variable=difference, command=lambda: setattr(session, "difference", difference.get())),
+        "Map of differences (d)",
     ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
     def toggle_difference() -> None:
@@ -204,7 +210,7 @@ def run(session: LiveSession) -> None:
 
     def save() -> None:
         name = session.save_snapshot()
-        status.configure(text=f"Saved {name}" if name else "No frame yet")
+        status.configure(text=_("Saved {name}").format(name=name) if name else _("No frame yet"))
 
     def toggle_side_by_side() -> None:
         side_by_side.set(not side_by_side.get())
@@ -212,9 +218,30 @@ def run(session: LiveSession) -> None:
 
     buttons = ttk.Frame(side)
     buttons.grid(row=8, column=0, sticky="ew", pady=(10, 0))
-    ttk.Button(buttons, text="Reset (r)", command=reset).pack(side="left")
-    ttk.Button(buttons, text="Save snapshot (s)", command=save).pack(side="left", padx=(6, 0))
+    text(ttk.Button(buttons, command=reset), "Reset (r)").pack(side="left")
+    text(ttk.Button(buttons, command=save), "Save snapshot (s)").pack(side="left", padx=(6, 0))
     status.grid(row=9, column=0, sticky="w", pady=(6, 0))
+
+    language_row = ttk.Frame(side)
+    language_row.grid(row=10, column=0, sticky="ew", pady=(10, 0))
+    text(ttk.Label(language_row), "Language").pack(side="left", padx=(0, 8))
+    language_codes = list(session.languages)
+    language = ttk.Combobox(language_row, values=list(session.languages.values()), state="readonly", width=10)
+    language.current(language_codes.index(session.language))
+    language.pack(side="left")
+
+    def on_language(_event: tk.Event) -> None:
+        session.language = language_codes[language.current()]
+        root.title(_("Dog vision"))
+        for widget, english in translated:
+            widget.configure(text=_(english))
+        species.delete(0, "end")
+        species.insert("end", *session.species_labels)
+        left.configure(values=[_("original"), *session.species_labels])
+        status.configure(text="")
+        show_params()  # puts back the selections the new items dropped, and the facts
+
+    language.bind("<<ComboboxSelected>>", on_language)
 
     def on_select(_event: tk.Event) -> None:
         selection = species.curselection()

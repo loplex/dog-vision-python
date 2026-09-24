@@ -9,6 +9,8 @@
 - Every relative link points at an existing file, and every #anchor at a heading.
 - The neutral points quoted under "What it cannot show" still hold for the model.
 - docs/species-grid.png is what render_species_grid.py renders from the current code.
+- Every language in i18n names every species, and every English text it translates still
+  occurs in the code, so none silently stays English.
 
 External URLs are not fetched. Exits non-zero and names each mismatch.
 """
@@ -18,6 +20,7 @@ import sys
 from pathlib import Path
 
 import dog_vision as dv
+import i18n
 import render_species_grid
 
 ROOT = Path(__file__).parent
@@ -114,10 +117,22 @@ def check_neutral_points() -> list[str]:
     return errors
 
 
+def check_translations() -> list[str]:
+    errors = []
+    code = (ROOT / "dog_vision.py").read_text() + (ROOT / "tk_window.py").read_text()
+    for name, language in i18n.LANGUAGES.items():
+        if language.species and list(language.species) != list(dv.SPECIES):
+            errors.append(f"i18n language {name} names {list(language.species)}, SPECIES has {list(dv.SPECIES)}")
+        for english in language.texts:
+            if f'"{english}"' not in code:
+                errors.append(f"i18n language {name} translates {english!r}, which the code no longer contains")
+    return errors
+
+
 def main() -> int:
     readme = ROOT / "README.md"
     text = readme.read_text()
-    errors = check_species_table(text) + check_acuity_table(text) + check_links(readme) + check_neutral_points()
+    errors = check_species_table(text) + check_acuity_table(text) + check_links(readme) + check_neutral_points() + check_translations()
     if not render_species_grid.matches_file():
         errors.append("docs/species-grid.png is out of date; run: uv run render_species_grid.py")
     for error in errors:

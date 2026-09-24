@@ -62,6 +62,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+import i18n
+
 # Photopigment peak wavelengths in nm.
 HUMAN_CONES = {"S": 420.7, "M": 530.3, "L": 558.9}  # Stockman & Sharpe (2000)
 
@@ -432,43 +434,59 @@ def print_info(params: Params) -> None:
     print("(Viénot, Brettel & Mollon 1999).")
 
 
-def species_label(species: str) -> str:
+def percent(low: float, high: float, language: str = "en") -> str:
+    """A share, or a range of shares when the two differ in whole percent."""
+    low_text, high_text = f"{low * 100:.0f}", f"{high * 100:.0f}"
+    if low_text == high_text:
+        return i18n.translate("{0}%", language).format(low_text)
+    return i18n.translate("{0}%–{1}%", language).format(low_text, high_text)
+
+
+def species_label(species: str, language: str = "en") -> str:
     """The species' name with its kind of colour vision, for lists."""
-    return f"{species} ({COLOUR_VISION[len(SPECIES[species])]})"
+    kind = i18n.translate(COLOUR_VISION[len(SPECIES[species])], language)
+    return f"{i18n.species_name(species, language)} ({kind})"
 
 
-def species_facts(species: str) -> list[tuple[str, str]]:
+def species_facts(species: str, language: str = "en") -> list[tuple[str, str]]:
     """What the simulation knows about a species, as (label, value) rows for a table."""
+    def _(text: str) -> str:
+        return i18n.translate(text, language)
+
     peaks = SPECIES[species]
     n = len(peaks)
     names = {3: "SML", 2: "SL", 1: "L"}[n]
+    cone_types = _("{kind}, {n} cone types" if n > 1 else "{kind}, 1 cone type")
     facts = [
-        ("Colour vision", f"{COLOUR_VISION[n]}, {n} cone type{'s' if n > 1 else ''}"),
-        ("Cone peaks", ", ".join(f"{name} {peak:g} nm" for name, peak in zip(names, peaks))),
-        ("Peaks from", PEAKS_FROM[species]),
+        (_("Colour vision"), cone_types.format(kind=_(COLOUR_VISION[n]), n=n)),
+        (_("Cone peaks"), ", ".join(f"{name} {i18n.number(peak, 'g', language)} nm" for name, peak in zip(names, peaks))),
+        (_("Peaks from"), _(PEAKS_FROM[species])),
     ]
     if n == 1:
-        return facts + [("RNL scale", "nothing to scale"), acuity_fact(species)]
-    if species in S_CONE_FRACTION:
-        low, high, source = S_CONE_FRACTION[species]
-        share = f"{low:.0%}" if round(low * 100) == round(high * 100) else f"{low:.0%}–{high:.0%}"
-        facts.append(("S cones", f"{share} of cones ({source})"))
-    else:
-        facts.append(("S cones", f"{ASSUMED_S_CONE_FRACTION[0]:.0%} of cones (assumed)"))
+        return facts + [(_("RNL scale"), _("nothing to scale")), acuity_fact(species, language)]
+    low, high, source = S_CONE_FRACTION.get(species, (*ASSUMED_S_CONE_FRACTION, _("assumed")))
+    facts.append((_("S cones"), _("{share} of cones ({source})").format(share=percent(low, high, language), source=source)))
     if n == 3:
-        facts.append(("L : M cones", f"{ASSUMED_L_TO_M:g} : 1 (assumed)"))
+        facts.append((_("L : M cones"), _("{ratio} : 1 (assumed)").format(ratio=i18n.number(ASSUMED_L_TO_M, "g", language))))
     else:
-        facts.append(("Neutral point", f"{neutral_point(Params(species)):.0f} nm (model)"))
-    gains = " and ".join(f"x{gain:.2f}" for gain in rnl_gains(Params(species)))
-    return facts + [("RNL scale", f"{gains} of fixed"), acuity_fact(species)]
+        facts.append((_("Neutral point"), f"{neutral_point(Params(species)):.0f} nm (model)"))
+    gains = _(" and ").join(f"x{i18n.number(gain, '.2f', language)}" for gain in rnl_gains(Params(species)))
+    return facts + [(_("RNL scale"), _("{gains} of fixed").format(gains=gains)), acuity_fact(species, language)]
 
 
-def acuity_fact(species: str) -> tuple[str, str]:
+def acuity_fact(species: str, language: str = "en") -> tuple[str, str]:
+    def _(text: str) -> str:
+        return i18n.translate(text, language)
+
     if species not in ACUITY:
-        return ("Acuity", "not found measured; left sharp")
+        return (_("Acuity"), _("not found measured; left sharp"))
     (across, up), source = ACUITY[species]
-    value = f"{across:.3g} c/deg" if across == up else f"{across:.3g} c/deg side by side, {up:.3g} one above another"
-    return ("Acuity", f"{value} ({source})")
+    across, up = (i18n.number(value, ".3g", language) for value in (across, up))
+    if across == up:
+        value = _("{value} c/deg").format(value=across)
+    else:
+        value = _("{across} c/deg side by side, {up} one above another").format(across=across, up=up)
+    return (_("Acuity"), f"{value} ({_(source)})")
 
 
 HUMAN_JND_DELTA_E = 2.3  # CIELAB Delta E*ab of one just-noticeable difference (Mahy et al. 1994)
@@ -535,8 +553,9 @@ class LiveSession:
 
     def __init__(self, camera_index: int, initial: Params, compare: str | None = None) -> None:
         self.species_names = list(SPECIES)
-        self.species_labels = [species_label(name) for name in SPECIES]
         self.chroma_scales = CHROMA_SCALES
+        self.languages = {code: language.name for code, language in i18n.LANGUAGES.items()}  # in itself
+        self.language = i18n.system_language()
         self.initial = initial
         self.params = dataclasses.replace(initial)
         self.side_by_side = True
@@ -583,15 +602,25 @@ class LiveSession:
             self._last_images = simulated
         return self._last_images[..., ::-1]
 
+    def translate(self, text: str) -> str:
+        """The GUI's own English text in the current language."""
+        return i18n.translate(text, self.language)
+
+    @property
+    def species_labels(self) -> list[str]:
+        """species_names in the current language, each with its kind of colour vision."""
+        return [species_label(name, self.language) for name in self.species_names]
+
     def caption(self) -> str:
         """What the rendered view shows, left to right."""
-        right = species_label(self.params.species)
+        right = species_label(self.params.species, self.language)
         if not self.side_by_side:
             return right
-        left = "original" if self.compare is None else species_label(self.compare)
-        text = f"left: {left}    right: {right}"
+        left = self.translate("original") if self.compare is None else species_label(self.compare, self.language)
+        text = self.translate("left: {left}    right: {right}").format(left=left, right=right)
         if self._difference_share is not None:
-            text += f"    red: noticeably different ({self._difference_share:.0%} of pixels)"
+            share = percent(self._difference_share, self._difference_share, self.language)
+            text += self.translate("    red: noticeably different ({share} of pixels)").format(share=share)
         return text
 
     def reset(self) -> None:
@@ -600,7 +629,7 @@ class LiveSession:
 
     def species_facts(self) -> list[tuple[str, str]]:
         """What the simulation knows about the current species, as (label, value) rows."""
-        return species_facts(self.params.species)
+        return species_facts(self.params.species, self.language)
 
     def save_snapshot(self) -> str | None:
         """Write the last rendered view to the working directory and return the file name."""

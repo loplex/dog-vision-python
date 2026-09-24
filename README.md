@@ -4,7 +4,7 @@
 
 - [Running it](#running-it) — camera, photo, `--species`, `--compare`, `--difference`, `--adaptation`,
   `--strength`, `--chroma-scale`, `--acuity`, `--fov`.
-- [The camera window](#the-camera-window) — the species list, sliders and keys.
+- [The camera window](#the-camera-window) — the species list, sliders, keys and language.
 - [Another GUI toolkit](#another-gui-toolkit) — `LiveSession` and `run(session)`.
 - [Species](#species) — every preset, with its cone peaks and source, and how each sees a test chart.
 - [How it works](#how-it-works) — the model in five steps.
@@ -67,7 +67,25 @@ The images follow the window's size; the controls keep theirs.
 | *Map of differences* box, `d`   | a third image marking where left and right differ   |
 | *Reset* button, `r`             | back to the values given on the command line        |
 | *Save snapshot* button, `s`     | saves `dog-<species>-<time>.png` in the current dir |
+| *Language* choice               | the window's language, starting as the system's     |
 | `q`, Esc                        | quits                                               |
+
+### The window starts in the system's language, looked up as gettext does
+
+The window speaks English.
+A language is one entry in `LANGUAGES` in [`i18n.py`](i18n.py): its name, its decimal point, and
+its translations, each keyed by the English text as in gettext.
+
+The first of these that is set decides, and a language the window does not speak gives English:
+
+1. `LANGUAGE`, which may list several languages, as in `cs:en_GB:en`
+2. `LC_ALL`
+3. `LC_MESSAGES`
+4. `LANG`
+5. on Windows, the user's interface language; elsewhere, the locale Python started in
+
+So `LANGUAGE=en uv run dog_vision.py` opens it in English whatever the system says.
+Only the window is translated: `--help`, `--info` and what a photo conversion prints stay English.
 
 ## Another GUI toolkit
 
@@ -84,6 +102,9 @@ Everything else sits in `LiveSession` in [`dog_vision.py`](dog_vision.py):
 - `species_names` and `chroma_scales` list the choices in display order; `species_labels` adds
   each species' kind of colour vision to its name.
 - `species_facts()` returns what is known about the current species as (label, value) rows.
+- `language` is a code from `languages`, which maps each to the language's own name, and sets
+  the language of `species_labels`, `species_facts()` and `caption()`; `translate()` gives the
+  window's own texts in it.
 - `reset()`, `save_snapshot()` and `error` cover the buttons and a camera that stops.
 
 A window in another toolkit is a module with the same `run(session)` function; `main()` in
@@ -319,6 +340,8 @@ That catches differences in colour and in sharpness alike.
 - `uv run check_docs.py` checks this README against the code: the species table with its S-cone
   shares and sources, the relative links and anchors, the neutral points quoted above, and that the
   test-chart image is what the code renders.
+  It also checks that each translation in [`i18n.py`](i18n.py) names every species, and that
+  every English text it translates still occurs in the code.
 
 ## References
 
