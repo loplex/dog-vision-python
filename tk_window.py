@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import sys
 import tkinter as tk
-from tkinter import ttk
+from pathlib import Path
+from tkinter import filedialog, ttk
 from typing import TYPE_CHECKING
 
 import cv2
@@ -21,6 +22,8 @@ if TYPE_CHECKING:
 FRAME_INTERVAL_MS = 15
 TOOLTIP_DELAY_MS = 500
 TOOLTIP_WIDTH = 380  # pixels a tooltip's text wraps at
+# What the open dialog lists; Tk matches patterns case-sensitively on some systems, so both cases.
+FILE_EXTENSIONS = ["jpg", "jpeg", "png", "bmp", "tif", "tiff", "webp", "mp4", "mov", "m4v", "avi", "mkv", "webm"]
 PERCENT_SLIDERS = {"adaptation": "Adaptation to scene [%]", "strength": "Simulation strength [%]"}
 
 # What a control does, shown while the pointer rests on it; keyed by the control's own text.
@@ -83,6 +86,19 @@ DESCRIPTIONS = {
         " is about ΔE 2.3 (Mahy et al. 1994), so it catches differences in colour and in sharpness alike."
         "\n\nIt measures the two renderings, each already reduced to what its animal can tell apart. The"
         " threshold is an average, so the edge of the red region is approximate."
+    ),
+    "Open file… (o)": (
+        "Shows a photo or a video instead of the camera, with every control working on it as on the camera."
+        "\n\nA large file is shown scaled down, so that the controls stay quick; Convert file works on it at"
+        " full size. A video plays at its own rate and starts over at its end."
+    ),
+    "Camera": "Shows the camera again instead of the open file.",
+    "Convert file": (
+        "Converts the open photo or video at full size with the current settings, and writes it next to the"
+        " original as <name>.dog.png or <name>.dog.mp4. The result shows what the window shows: side by"
+        " side, the other species and the map of differences included."
+        "\n\nA video is written as H.265 where the system can, and otherwise with the best codec it has."
+        " Its sound is kept when ffmpeg is installed; without ffmpeg the video comes out silent."
     ),
     "Reset (r)": "Returns every control to the values given on the command line.",
     "Save snapshot (s)": (
@@ -341,14 +357,51 @@ def run(session: LiveSession) -> None:
         side_by_side.set(not side_by_side.get())
         session.side_by_side = side_by_side.get()
 
+    source = text(ttk.LabelFrame(side, padding=(8, 4)), "Source")
+    source.grid(row=8, column=0, sticky="ew", pady=(10, 0))
+    source.columnconfigure(0, weight=1)
+    source_name = ttk.Label(source, wraplength=260)
+    source_name.grid(row=0, column=0, sticky="w")
+    source_buttons = ttk.Frame(source)
+    source_buttons.grid(row=1, column=0, sticky="w", pady=(4, 0))
+    conversion = ttk.Label(source, wraplength=260)
+
+    def open_file() -> None:
+        patterns = " ".join(f"*.{extension} *.{extension.upper()}" for extension in FILE_EXTENSIONS)
+        path = filedialog.askopenfilename(
+            parent=root,
+            title=_("Open a photo or a video"),
+            filetypes=[(_("Photos and videos"), patterns), (_("All files"), "*")],
+        )
+        if path and not session.open_file(Path(path)):
+            status.configure(text=_("Cannot open {name} as a photo or a video").format(name=Path(path).name))
+
+    def open_camera() -> None:
+        if not session.open_camera():
+            status.configure(text=_("Cannot open camera {index}").format(index=session.camera_index))
+
+    text(ttk.Button(source_buttons, command=open_file), "Open file… (o)").pack(side="left")
+    camera = text(ttk.Button(source_buttons, command=open_camera), "Camera")
+    camera.pack(side="left", padx=(6, 0))
+    convert = text(ttk.Button(source, command=session.convert_source), "Convert file")
+    convert.grid(row=2, column=0, sticky="w", pady=(4, 0))
+    conversion.grid(row=3, column=0, sticky="w", pady=(4, 0))
+
+    def show_source() -> None:
+        """Make the source panel reflect the session; called on every frame, as a conversion runs on."""
+        source_name.configure(text=session.source_name())
+        camera.state(["!disabled"] if session.source is not None else ["disabled"])
+        convert.state(["!disabled"] if session.source is not None and not session.converting else ["disabled"])
+        conversion.configure(text=session.conversion_status() or "")
+
     buttons = ttk.Frame(side)
-    buttons.grid(row=8, column=0, sticky="ew", pady=(10, 0))
+    buttons.grid(row=9, column=0, sticky="ew", pady=(10, 0))
     text(ttk.Button(buttons, command=reset), "Reset (r)").pack(side="left")
     text(ttk.Button(buttons, command=save), "Save snapshot (s)").pack(side="left", padx=(6, 0))
-    status.grid(row=9, column=0, sticky="w", pady=(6, 0))
+    status.grid(row=10, column=0, sticky="w", pady=(6, 0))
 
     language_row = ttk.Frame(side)
-    language_row.grid(row=10, column=0, sticky="ew", pady=(10, 0))
+    language_row.grid(row=11, column=0, sticky="ew", pady=(10, 0))
     text(ttk.Label(language_row), "Language").pack(side="left", padx=(0, 8))
     language_codes = list(session.languages)
     language = ttk.Combobox(language_row, values=list(session.languages.values()), state="readonly", width=10)
@@ -379,18 +432,23 @@ def run(session: LiveSession) -> None:
     root.bind("<KeyPress-d>", lambda _: toggle_difference())
     root.bind("<KeyPress-r>", lambda _: reset())
     root.bind("<KeyPress-s>", lambda _: save())
+    root.bind("<KeyPress-o>", lambda _: open_file())
     root.bind("<KeyPress-q>", lambda _: root.destroy())
     root.bind("<Escape>", lambda _: root.destroy())
 
     sized = False
+    shown: tuple | None = None  # the image and label size last drawn, not to draw a still photo again
 
     def tick() -> None:
-        nonlocal sized
+        nonlocal sized, shown
         if session.error:
             root.destroy()
             return
+        show_source()
         rgb = session.render()
-        if rgb is not None:
+        size = (image.winfo_width(), image.winfo_height())
+        if rgb is not None and (shown is None or shown[0] is not rgb or shown[1] != size):
+            shown = (rgb, size)
             # The first frame is shown at its own size: the empty label is not laid out yet.
             photo = to_photo(rgb, image.winfo_width(), image.winfo_height()) if sized else to_photo(rgb, 0, 0)
             image.configure(image=photo)

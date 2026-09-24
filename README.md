@@ -2,7 +2,7 @@
 
 *A camera feed or a photo, shown with the colours a dog — or another animal — can tell apart.*
 
-- [Running it](#running-it) — camera, photo, video, `--species`, `--compare`, `--difference`,
+- [Running it](#running-it) — camera, photo, video, `--window`, `--species`, `--compare`, `--difference`,
   `--adaptation`, `--strength`, `--chroma-scale`, `--acuity`, `--fov`.
 - [The camera window](#the-camera-window) — the species list, sliders, keys, language and tooltips.
 - [Another GUI toolkit](#another-gui-toolkit) — `LiveSession` and `run(session)`.
@@ -32,6 +32,7 @@ uv run dog_vision.py --species cow --compare horse   # two animals side by side
 uv run dog_vision.py --species cow --compare horse --difference   # and where they differ
 uv run dog_vision.py photo.jpg           # writes photo.dog.png next to it
 uv run dog_vision.py clip.mp4            # writes clip.dog.mp4 next to it
+uv run dog_vision.py --window clip.mp4   # shows it in the window instead
 uv run dog_vision.py --adaptation 1 sunset.jpg
 ```
 
@@ -48,6 +49,8 @@ uv run dog_vision.py --adaptation 1 sunset.jpg
   see [Acuity](#acuity).
 - A video is converted frame by frame with the same options as a photo, at its own frame rate; see
   [Video is written with the best method the system has](#video-is-written-with-the-best-method-the-system-has).
+- `--window` shows the photo or video in the window instead of converting it, and the window can
+  convert it from there.
 - `uv run dog_vision.py --help` lists every option.
 
 ### Video is written with the best method the system has
@@ -66,7 +69,7 @@ video is encoded with the first of these that works on the machine:
   and without sound: OpenCV does not handle audio.
 - **The colours are encoded and tagged as BT.709**, the HD standard whose primaries sRGB shares, so
   that players do not read them as the older BT.601 and shift every colour.
-- The command line says which method was used, and whether the sound was kept.
+- The command line and the window say which method was used, and whether the sound was kept.
 
 ## The camera window
 
@@ -88,6 +91,9 @@ The images follow the window's size; the controls keep theirs.
 | *Map of differences* box, `d`   | a third image marking where left and right differ   |
 | *Reset* button, `r`             | back to the values given on the command line        |
 | *Save snapshot* button, `s`     | saves `dog-<species>-<time>.png` in the current dir |
+| *Open file…* button, `o`        | a photo or a video instead of the camera            |
+| *Camera* button                 | back to the camera                                  |
+| *Convert file* button           | writes the open file as shown, at full size         |
 | *Language* choice               | the window's language, starting as the system's     |
 | `q`, Esc                        | quits                                               |
 
@@ -117,7 +123,11 @@ events.
 Everything else sits in `LiveSession` in [`dog_vision.py`](dog_vision.py):
 
 - `render()` returns the current view as an RGB array, or `None` before the first frame.
-  The camera is read on a thread of its own, so a GUI can call it from any timer.
+  The camera or a video is read on a thread of its own, so a GUI can call it from any timer.
+- `open_file()` and `open_camera()` change the source; `source` is the open file, or `None` for the
+  camera, and `source_name()` says what is shown.
+- `convert_source()` converts the open file in the background with the current settings;
+  `converting` and `conversion_status()` say how it stands.
 - `params` (species, adaptation, strength, chroma scale, acuity, field of view), `side_by_side`,
   `compare` (the species on the left, or `None` for the original) and `difference` are plain
   attributes to set.

@@ -32,6 +32,24 @@ CZECH = {
     "Saved {name}": "Uloženo: {name}",
     "No frame yet": "Zatím žádný snímek",
     "Language": "Jazyk",
+    "Source": "Zdroj",
+    "Camera {index}": "Kamera {index}",
+    "Open file… (o)": "Otevřít soubor… (o)",
+    "Camera": "Kamera",
+    "Convert file": "Převést soubor",
+    "Open a photo or a video": "Otevřít fotku nebo video",
+    "Photos and videos": "Fotky a videa",
+    "All files": "Všechny soubory",
+    "Cannot open {name} as a photo or a video": "{name} nejde otevřít jako fotka ani jako video",
+    "Cannot open camera {index}": "Kameru {index} nejde otevřít",
+    "Converting: {share}": "Převádím: {share}",
+    "Wrote {name}": "Zapsáno: {name}",
+    "Wrote {name}: {description}": "Zapsáno: {name}, {description}",
+    "Conversion failed: {error}": "Převod selhal: {error}",
+    "{format} ({encoder}), with the original sound": "{format} ({encoder}), s původním zvukem",
+    "{format} ({encoder}); the original has no sound": "{format} ({encoder}); originál nemá zvuk",
+    "{format} ({encoder}), without sound: ffmpeg is not installed": "{format} ({encoder}), bez zvuku: ffmpeg není nainstalovaný",
+    "{format} ({encoder})": "{format} ({encoder})",
     # Caption
     "original": "originál",
     "left: {left}    right: {right}": "vlevo: {left}    vpravo: {right}",
@@ -297,6 +315,33 @@ CZECH = {
     ): (
         "Uloží obrazy tak, jak jsou zobrazené, v rozlišení kamery, jako dog-<druh>-<čas>.png do aktuálního"
         " adresáře."
+    ),
+    (
+        "Shows a photo or a video instead of the camera, with every control working on it as on the camera."
+        "\n\nA large file is shown scaled down, so that the controls stay quick; Convert file works on it at"
+        " full size. A video plays at its own rate and starts over at its end."
+    ): (
+        "Ukáže místo kamery fotku nebo video; všechny ovládací prvky na ně působí stejně jako na kameru."
+        "\n\nVelký soubor se zobrazí zmenšený, aby ovládání zůstalo svižné; Převést soubor s ním pracuje v plné"
+        " velikosti. Video se přehrává svou rychlostí a na konci začne znovu."
+    ),
+    (
+        "Shows the camera again instead of the open file."
+    ): (
+        "Ukáže místo otevřeného souboru znovu kameru."
+    ),
+    (
+        "Converts the open photo or video at full size with the current settings, and writes it next to the"
+        " original as <name>.dog.png or <name>.dog.mp4. The result shows what the window shows: side by side,"
+        " the other species and the map of differences included."
+        "\n\nA video is written as H.265 where the system can, and otherwise with the best codec it has. Its"
+        " sound is kept when ffmpeg is installed; without ffmpeg the video comes out silent."
+    ): (
+        "Převede otevřenou fotku nebo video v plné velikosti se současným nastavením a zapíše je vedle"
+        " originálu jako <název>.dog.png nebo <název>.dog.mp4. Výsledek ukazuje totéž co okno: včetně"
+        " zobrazení vedle sebe, druhého druhu a mapy rozdílů."
+        "\n\nVideo se zapíše jako H.265, kde to systém umí, jinak nejlepším kodekem, který má. Zvuk zůstane"
+        " zachovaný, když je nainstalovaný ffmpeg; bez ffmpeg vyjde video bez zvuku."
     ),
 }
 
