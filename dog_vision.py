@@ -42,6 +42,7 @@ Usage:
     uv run dog_vision.py                 # live camera 0
     uv run dog_vision.py --camera 1      # another camera
     uv run dog_vision.py photo.jpg       # convert a photo, writes photo.dog.png
+    uv run dog_vision.py clip.mp4        # convert a video, writes clip.dog.mp4
     uv run dog_vision.py --info          # print the derived model and checks
     uv run dog_vision.py --species cat   # another dichromat
     uv run dog_vision.py --species cat --compare dog   # two species side by side
@@ -63,6 +64,7 @@ import cv2
 import numpy as np
 
 import i18n
+import video_file
 
 # Photopigment peak wavelengths in nm.
 HUMAN_CONES = {"S": 420.7, "M": 530.3, "L": 558.9}  # Stockman & Sharpe (2000)
@@ -593,20 +595,106 @@ def simulate(frame_bgr: np.ndarray, params: Params) -> np.ndarray:
     return apply_bgr(frame_bgr, simulation_matrix(params, mean_rgb), acuity_blur(params, frame_bgr.shape[1]))
 
 
+def compose(
+    frame_bgr: np.ndarray, params: Params, side_by_side: bool, compare: str | None, difference: bool
+) -> tuple[np.ndarray, float | None]:
+    """The view as shown: the simulation, after the original or another species when side by side,
+    then the map of differences if asked for; and the share of pixels that differ, if mapped."""
+    simulated = simulate(frame_bgr, params)
+    if not side_by_side:
+        return simulated, None
+    left = frame_bgr if compare is None else simulate(frame_bgr, dataclasses.replace(params, species=compare))
+    if not difference:
+        return np.hstack([left, simulated]), None
+    diff, share = difference_map(left, simulated)
+    return np.hstack([left, simulated, diff]), share
+
+
+def converted_path(path: Path, is_video: bool) -> Path:
+    return path.with_suffix(".dog.mp4" if is_video else ".dog.png")
+
+
+def convert_video(path: Path, out_path: Path, render, progress=None, cancelled=None) -> video_file.VideoWriter | None:
+    """Write render(frame) for every frame of the video at path, at its frame rate.
+
+    progress, if given, is called with the share done; cancelled, if given, is asked
+    before each frame and makes the conversion stop and remove its file. Returns the
+    writer, which says how the video was written, or None if cancelled.
+    """
+    capture = cv2.VideoCapture(str(path))
+    if not capture.isOpened():
+        raise RuntimeError(f"Cannot read video: {path}")
+    fps = capture.get(cv2.CAP_PROP_FPS) or 30.0
+    total = max(1, int(capture.get(cv2.CAP_PROP_FRAME_COUNT)))
+    writer = None
+    try:
+        done = 0
+        while True:
+            if cancelled is not None and cancelled():
+                if writer is not None:
+                    writer.abort()
+                return None
+            ok, frame = capture.read()
+            if not ok:
+                break
+            image = render(frame)
+            if writer is None:
+                writer = video_file.VideoWriter(out_path, path, image.shape[1], image.shape[0], fps)
+            writer.write(image)
+            done += 1
+            if progress is not None:
+                progress(min(1.0, done / total))
+        if writer is None:
+            raise RuntimeError(f"No frames in video: {path}")
+        writer.close()
+        return writer
+    except BaseException:
+        if writer is not None:
+            writer.abort()
+        raise
+    finally:
+        capture.release()
+
+
+def writer_description(writer: video_file.VideoWriter, language: str = "en") -> str:
+    """How a video was written, e.g. "H.265 (libx265), with the original sound"."""
+    template = {
+        "kept": "{format} ({encoder}), with the original sound",
+        "none": "{format} ({encoder}); the original has no sound",
+        "lost": "{format} ({encoder}), without sound: ffmpeg is not installed",
+        "unknown": "{format} ({encoder})",
+    }[writer.sound]
+    return i18n.translate(template, language).format(format=writer.format_name, encoder=writer.encoder)
+
+
 def convert_file(path: Path, params: Params, compare: str | None = None, difference: bool = False) -> None:
+    """Convert a photo to <name>.dog.png, or a video to <name>.dog.mp4, next to it."""
+    side_by_side = compare is not None or difference
     image = cv2.imread(str(path), cv2.IMREAD_COLOR)
-    if image is None:
-        sys.exit(f"Cannot read image: {path}")
-    out_path = path.with_suffix(".dog.png")
-    simulated = simulate(image, params)
-    left = image if compare is None else simulate(image, dataclasses.replace(params, species=compare))
-    parts = [left, simulated] if compare is not None or difference else [simulated]
-    if difference:
-        diff, share = difference_map(left, simulated)
-        parts.append(diff)
-        print(f"{share:.0%} of pixels differ noticeably")
-    cv2.imwrite(str(out_path), np.hstack(parts))
-    print(f"Wrote {out_path}")
+    if image is not None:
+        out_path = converted_path(path, is_video=False)
+        composed, share = compose(image, params, side_by_side, compare, difference)
+        if share is not None:
+            print(f"{share:.0%} of pixels differ noticeably")
+        cv2.imwrite(str(out_path), composed)
+        print(f"Wrote {out_path}")
+        return
+    if not cv2.VideoCapture(str(path)).isOpened():
+        sys.exit(f"Cannot read image or video: {path}")
+    out_path = converted_path(path, is_video=True)
+
+    def show_progress(share: float) -> None:
+        if sys.stderr.isatty():
+            print(f"\rConverting: {share:.0%}", end="", file=sys.stderr, flush=True)
+
+    try:
+        writer = convert_video(path, out_path, lambda frame: compose(frame, params, side_by_side, compare, difference)[0], show_progress)
+    except RuntimeError as error:
+        sys.exit(f"\n{error}")
+    finally:
+        if sys.stderr.isatty():
+            print(file=sys.stderr)
+    print(f"Wrote {out_path}: {writer_description(writer)}")
 
 
 class LiveSession:
@@ -655,17 +743,7 @@ class LiveSession:
             frame = self._frame
         if frame is None:
             return None
-        simulated = simulate(frame, self.params)
-        self._difference_share = None
-        if self.side_by_side:
-            left = frame if self.compare is None else simulate(frame, dataclasses.replace(self.params, species=self.compare))
-            parts = [left, simulated]
-            if self.difference:
-                diff, self._difference_share = difference_map(left, simulated)
-                parts.append(diff)
-            self._last_images = np.hstack(parts)
-        else:
-            self._last_images = simulated
+        self._last_images, self._difference_share = compose(frame, self.params, self.side_by_side, self.compare, self.difference)
         return self._last_images[..., ::-1]
 
     def translate(self, text: str) -> str:
@@ -714,7 +792,7 @@ class LiveSession:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("image", nargs="?", type=Path, help="photo to convert instead of using the camera")
+    parser.add_argument("image", nargs="?", type=Path, help="photo or video to convert instead of using the camera")
     parser.add_argument("--camera", type=int, default=0, help="camera index (default 0)")
     parser.add_argument("--info", action="store_true", help="print the derived model and exit")
     defaults = Params()

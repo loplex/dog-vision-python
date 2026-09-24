@@ -2,8 +2,8 @@
 
 *A camera feed or a photo, shown with the colours a dog — or another animal — can tell apart.*
 
-- [Running it](#running-it) — camera, photo, `--species`, `--compare`, `--difference`, `--adaptation`,
-  `--strength`, `--chroma-scale`, `--acuity`, `--fov`.
+- [Running it](#running-it) — camera, photo, video, `--species`, `--compare`, `--difference`,
+  `--adaptation`, `--strength`, `--chroma-scale`, `--acuity`, `--fov`.
 - [The camera window](#the-camera-window) — the species list, sliders, keys, language and tooltips.
 - [Another GUI toolkit](#another-gui-toolkit) — `LiveSession` and `run(session)`.
 - [Species](#species) — every preset, with its cone peaks and source, and how each sees a test chart.
@@ -31,6 +31,7 @@ uv run dog_vision.py --species horse     # another animal
 uv run dog_vision.py --species cow --compare horse   # two animals side by side
 uv run dog_vision.py --species cow --compare horse --difference   # and where they differ
 uv run dog_vision.py photo.jpg           # writes photo.dog.png next to it
+uv run dog_vision.py clip.mp4            # writes clip.dog.mp4 next to it
 uv run dog_vision.py --adaptation 1 sunset.jpg
 ```
 
@@ -45,7 +46,27 @@ uv run dog_vision.py --adaptation 1 sunset.jpg
   [Colour saturation](#colour-saturation).
 - `--acuity` blurs to the species' visual acuity, and `--fov` says how many degrees the image spans;
   see [Acuity](#acuity).
+- A video is converted frame by frame with the same options as a photo, at its own frame rate; see
+  [Video is written with the best method the system has](#video-is-written-with-the-best-method-the-system-has).
 - `uv run dog_vision.py --help` lists every option.
+
+### Video is written with the best method the system has
+
+With [ffmpeg](https://ffmpeg.org/) installed, the sound of the original is carried over, and the
+video is encoded with the first of these that works on the machine:
+
+1. H.265 in software (`libx265`)
+2. H.265 in hardware: Apple VideoToolbox, NVIDIA, Intel Quick Sync, AMD
+3. H.264 in software (`libx264`), then in the same hardware
+4. MPEG-4 Part 2, which every ffmpeg has
+
+- **Each is tried on one frame first**, since ffmpeg lists a hardware encoder whether or not its
+  hardware is there.
+- **Without ffmpeg, OpenCV writes the video**, with H.265, H.264 or MPEG-4, whichever its build has,
+  and without sound: OpenCV does not handle audio.
+- **The colours are encoded and tagged as BT.709**, the HD standard whose primaries sRGB shares, so
+  that players do not read them as the older BT.601 and shift every colour.
+- The command line says which method was used, and whether the sound was kept.
 
 ## The camera window
 
