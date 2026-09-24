@@ -40,6 +40,9 @@ uv run dog-vision --window clip.mp4   # shows it in the window instead
 uv run dog-vision --adaptation 1 sunset.jpg
 ```
 
+[`./dog-vision`](dog-vision) in the checkout does the same from any directory, with the same options;
+a link to it in a directory on `PATH`, such as `~/.local/bin`, makes it a command.
+
 - `--compare` puts a second species where the original would be, with the same settings, so two
   animals can be told apart directly; with a photo, both go into the output side by side.
 - `--difference` adds a third image marking where the two differ noticeably; see
