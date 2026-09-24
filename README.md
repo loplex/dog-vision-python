@@ -4,7 +4,7 @@
 
 - [Running it](#running-it) — camera, photo, video, `--window`, `--species`, `--compare`, `--difference`,
   `--adaptation`, `--strength`, `--chroma-scale`, `--acuity`, `--fov`.
-- [The camera window](#the-camera-window) — the species list, sliders, keys, language and tooltips.
+- [The camera window](#the-camera-window) — the species list, sliders, menus, keys, language and tooltips.
 - [Another GUI toolkit](#another-gui-toolkit) — `LiveSession` and `run(session)`.
 - [Species](#species) — every preset, with its cone peaks and source, and how each sees a test chart.
 - [How it works](#how-it-works) — the model in five steps.
@@ -73,9 +73,11 @@ video is encoded with the first of these that works on the machine:
 
 ## The camera window
 
-The images are on the left, with a line under them saying what each shows, and the controls on the
-right.
+The images are on the left, with a line under them saying what each shows, and the controls of the
+simulation on the right.
 The images follow the window's size; the controls keep theirs.
+What works on the window as a whole — the source, saving, the language — is in the menu bar, and a
+status bar at the bottom says what is shown, how a conversion stands and what the last action did.
 
 | Control                         | Does                                                |
 |---------------------------------|-----------------------------------------------------|
@@ -90,14 +92,21 @@ The images follow the window's size; the controls keep theirs.
 | *Left image* choice             | the original, or another species, as `--compare`    |
 | *Map of differences* box, `d`   | a third image marking where left and right differ   |
 | *Reset* button, `r`             | back to the values given on the command line        |
-| *Save snapshot* button, `s`     | saves `dog-<species>-<time>.png` in the current dir |
-| *Open file…* button, `o`        | a photo or a video instead of the camera            |
-| *Camera* button                 | back to the camera                                  |
-| *Convert file* button           | writes the open file as shown, at full size         |
-| *Language* choice               | the window's language, starting as the system's     |
-| `q`, Esc                        | quits                                               |
+| *File › Open file…*, `o`        | a photo or a video instead of the camera            |
+| *File › Camera*                 | back to the camera                                  |
+| *File › Convert file*           | writes the open file as shown, at full size         |
+| *File › Save snapshot*, `s`     | saves `dog-<species>-<time>.png` in the current dir |
+| *File › Quit*, `q`, Esc         | quits                                               |
+| *Language* menu                 | the window's language, starting as the system's     |
 
 Resting the pointer on a label, a box or a button shows what it means, in a few paragraphs.
+
+- **An open file is shown scaled down** if it is large, so that the controls stay quick; *Convert
+  file* works on it at full size, with the method described under
+  [Video is written with the best method the system has](#video-is-written-with-the-best-method-the-system-has).
+- **A video plays at its own rate** and starts over at its end.
+- **A snapshot is saved at the size the images are rendered**, not at the size the window shows
+  them: the camera's resolution, or a large file's scaled-down view.
 
 ### The window starts in the system's language, looked up as gettext does
 

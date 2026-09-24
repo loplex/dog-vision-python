@@ -87,24 +87,7 @@ DESCRIPTIONS = {
         "\n\nIt measures the two renderings, each already reduced to what its animal can tell apart. The"
         " threshold is an average, so the edge of the red region is approximate."
     ),
-    "Open file… (o)": (
-        "Shows a photo or a video instead of the camera, with every control working on it as on the camera."
-        "\n\nA large file is shown scaled down, so that the controls stay quick; Convert file works on it at"
-        " full size. A video plays at its own rate and starts over at its end."
-    ),
-    "Camera": "Shows the camera again instead of the open file.",
-    "Convert file": (
-        "Converts the open photo or video at full size with the current settings, and writes it next to the"
-        " original as <name>.dog.png or <name>.dog.mp4. The result shows what the window shows: side by"
-        " side, the other species and the map of differences included."
-        "\n\nA video is written as H.265 where the system can, and otherwise with the best codec it has."
-        " Its sound is kept when ffmpeg is installed; without ffmpeg the video comes out silent."
-    ),
     "Reset (r)": "Returns every control to the values given on the command line.",
-    "Save snapshot (s)": (
-        "Saves the images as shown, at the camera's resolution, as dog-<species>-<time>.png in the current"
-        " directory."
-    ),
 }
 
 
@@ -230,6 +213,16 @@ def run(session: LiveSession) -> None:
     image.grid(row=0, column=0, sticky="nsew")
     caption = ttk.Label(root, anchor="center", padding=(0, 4))
     caption.grid(row=1, column=0, sticky="ew")
+    # A status bar across the bottom: what is shown, how a conversion stands, what the last action did.
+    ttk.Separator(root).grid(row=2, column=0, columnspan=2, sticky="ew")
+    status_bar = ttk.Frame(root, padding=(8, 3))
+    status_bar.grid(row=3, column=0, columnspan=2, sticky="ew")
+    source_name = ttk.Label(status_bar)
+    source_name.pack(side="left")
+    conversion = ttk.Label(status_bar)
+    conversion.pack(side="left", padx=(24, 0))
+    status = ttk.Label(status_bar)
+    status.pack(side="left", padx=(24, 0))
 
     side = ttk.Frame(root, padding=10)
     side.grid(row=0, column=1, rowspan=2, sticky="ns")
@@ -328,8 +321,6 @@ def run(session: LiveSession) -> None:
         difference.set(not difference.get())
         session.difference = difference.get()
 
-    status = ttk.Label(side, text="", width=28)
-
     def show_params() -> None:
         """Make the widgets reflect session.params."""
         index = session.species_names.index(session.params.species)
@@ -357,15 +348,6 @@ def run(session: LiveSession) -> None:
         side_by_side.set(not side_by_side.get())
         session.side_by_side = side_by_side.get()
 
-    source = text(ttk.LabelFrame(side, padding=(8, 4)), "Source")
-    source.grid(row=8, column=0, sticky="ew", pady=(10, 0))
-    source.columnconfigure(0, weight=1)
-    source_name = ttk.Label(source, wraplength=260)
-    source_name.grid(row=0, column=0, sticky="w")
-    source_buttons = ttk.Frame(source)
-    source_buttons.grid(row=1, column=0, sticky="w", pady=(4, 0))
-    conversion = ttk.Label(source, wraplength=260)
-
     def open_file() -> None:
         patterns = " ".join(f"*.{extension} *.{extension.upper()}" for extension in FILE_EXTENSIONS)
         path = filedialog.askopenfilename(
@@ -380,46 +362,61 @@ def run(session: LiveSession) -> None:
         if not session.open_camera():
             status.configure(text=_("Cannot open camera {index}").format(index=session.camera_index))
 
-    text(ttk.Button(source_buttons, command=open_file), "Open file… (o)").pack(side="left")
-    camera = text(ttk.Button(source_buttons, command=open_camera), "Camera")
-    camera.pack(side="left", padx=(6, 0))
-    convert = text(ttk.Button(source, command=session.convert_source), "Convert file")
-    convert.grid(row=2, column=0, sticky="w", pady=(4, 0))
-    conversion.grid(row=3, column=0, sticky="w", pady=(4, 0))
+    text(ttk.Button(side, command=reset), "Reset (r)").grid(row=8, column=0, sticky="w", pady=(10, 0))
+
+    # Menu entries are not widgets, so they are translated again by their place in the menu.
+    translated_entries: list[tuple[tk.Menu, int, str]] = []
+
+    def entry(parent: tk.Menu, kind: str, english: str, **options) -> int:
+        parent.add(kind, label=_(english), **options)
+        index = parent.index("end")
+        translated_entries.append((parent, index, english))
+        return index
+
+    menu_bar = tk.Menu(root)
+    root.configure(menu=menu_bar)
+    file_menu = tk.Menu(menu_bar, tearoff=False)
+    entry(menu_bar, "cascade", "File", menu=file_menu)
+    entry(file_menu, "command", "Open file…", command=open_file, accelerator="o")
+    camera = entry(file_menu, "command", "Camera", command=open_camera)
+    convert = entry(file_menu, "command", "Convert file", command=session.convert_source)
+    file_menu.add_separator()
+    entry(file_menu, "command", "Save snapshot", command=save, accelerator="s")
+    file_menu.add_separator()
+    entry(file_menu, "command", "Quit", command=root.destroy, accelerator="q")
+
+    def enable(menu: tk.Menu, index: int, enabled: bool) -> None:
+        """Set an entry's state only when it changes: this runs on every frame, and an open menu redraws."""
+        state = "normal" if enabled else "disabled"
+        if menu.entrycget(index, "state") != state:
+            menu.entryconfigure(index, state=state)
 
     def show_source() -> None:
-        """Make the source panel reflect the session; called on every frame, as a conversion runs on."""
+        """Make the menu and the status bar reflect the session; called on every frame, as a conversion runs on."""
         source_name.configure(text=session.source_name())
-        camera.state(["!disabled"] if session.source is not None else ["disabled"])
-        convert.state(["!disabled"] if session.source is not None and not session.converting else ["disabled"])
+        enable(file_menu, camera, session.source is not None)
+        enable(file_menu, convert, session.source is not None and not session.converting)
         conversion.configure(text=session.conversion_status() or "")
 
-    buttons = ttk.Frame(side)
-    buttons.grid(row=9, column=0, sticky="ew", pady=(10, 0))
-    text(ttk.Button(buttons, command=reset), "Reset (r)").pack(side="left")
-    text(ttk.Button(buttons, command=save), "Save snapshot (s)").pack(side="left", padx=(6, 0))
-    status.grid(row=10, column=0, sticky="w", pady=(6, 0))
+    language = tk.StringVar(value=session.language)
 
-    language_row = ttk.Frame(side)
-    language_row.grid(row=11, column=0, sticky="ew", pady=(10, 0))
-    text(ttk.Label(language_row), "Language").pack(side="left", padx=(0, 8))
-    language_codes = list(session.languages)
-    language = ttk.Combobox(language_row, values=list(session.languages.values()), state="readonly", width=10)
-    language.current(language_codes.index(session.language))
-    language.pack(side="left")
-
-    def on_language(_event: tk.Event) -> None:
-        session.language = language_codes[language.current()]
+    def on_language() -> None:
+        session.language = language.get()
         root.title(_("Dog vision"))
         for widget, english in translated:
             widget.configure(text=_(english))
+        for menu, index, english in translated_entries:
+            menu.entryconfigure(index, label=_(english))
         species.delete(0, "end")
         species.insert("end", *session.species_labels)
         left.configure(values=[_("original"), *session.species_labels])
         status.configure(text="")
         show_params()  # puts back the selections the new items dropped, and the facts
 
-    language.bind("<<ComboboxSelected>>", on_language)
+    language_menu = tk.Menu(menu_bar, tearoff=False)
+    entry(menu_bar, "cascade", "Language", menu=language_menu)
+    for code, name in session.languages.items():
+        language_menu.add_radiobutton(label=name, value=code, variable=language, command=on_language)
 
     def on_select(_event: tk.Event) -> None:
         selection = species.curselection()

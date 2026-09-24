@@ -28,15 +28,16 @@ CZECH = {
     "Left image": "Levý obraz",
     "Map of differences (d)": "Mapa rozdílů (d)",
     "Reset (r)": "Obnovit (r)",
-    "Save snapshot (s)": "Uložit snímek (s)",
+    "Save snapshot": "Uložit snímek",
     "Saved {name}": "Uloženo: {name}",
     "No frame yet": "Zatím žádný snímek",
     "Language": "Jazyk",
-    "Source": "Zdroj",
+    "File": "Soubor",
     "Camera {index}": "Kamera {index}",
-    "Open file… (o)": "Otevřít soubor… (o)",
+    "Open file…": "Otevřít soubor…",
     "Camera": "Kamera",
     "Convert file": "Převést soubor",
+    "Quit": "Ukončit",
     "Open a photo or a video": "Otevřít fotku nebo video",
     "Photos and videos": "Fotky a videa",
     "All files": "Všechny soubory",
@@ -308,40 +309,6 @@ CZECH = {
         "Returns every control to the values given on the command line."
     ): (
         "Vrátí všechny ovládací prvky na hodnoty zadané na příkazové řádce."
-    ),
-    (
-        "Saves the images as shown, at the camera's resolution, as dog-<species>-<time>.png in the current"
-        " directory."
-    ): (
-        "Uloží obrazy tak, jak jsou zobrazené, v rozlišení kamery, jako dog-<druh>-<čas>.png do aktuálního"
-        " adresáře."
-    ),
-    (
-        "Shows a photo or a video instead of the camera, with every control working on it as on the camera."
-        "\n\nA large file is shown scaled down, so that the controls stay quick; Convert file works on it at"
-        " full size. A video plays at its own rate and starts over at its end."
-    ): (
-        "Ukáže místo kamery fotku nebo video; všechny ovládací prvky na ně působí stejně jako na kameru."
-        "\n\nVelký soubor se zobrazí zmenšený, aby ovládání zůstalo svižné; Převést soubor s ním pracuje v plné"
-        " velikosti. Video se přehrává svou rychlostí a na konci začne znovu."
-    ),
-    (
-        "Shows the camera again instead of the open file."
-    ): (
-        "Ukáže místo otevřeného souboru znovu kameru."
-    ),
-    (
-        "Converts the open photo or video at full size with the current settings, and writes it next to the"
-        " original as <name>.dog.png or <name>.dog.mp4. The result shows what the window shows: side by side,"
-        " the other species and the map of differences included."
-        "\n\nA video is written as H.265 where the system can, and otherwise with the best codec it has. Its"
-        " sound is kept when ffmpeg is installed; without ffmpeg the video comes out silent."
-    ): (
-        "Převede otevřenou fotku nebo video v plné velikosti se současným nastavením a zapíše je vedle"
-        " originálu jako <název>.dog.png nebo <název>.dog.mp4. Výsledek ukazuje totéž co okno: včetně"
-        " zobrazení vedle sebe, druhého druhu a mapy rozdílů."
-        "\n\nVideo se zapíše jako H.265, kde to systém umí, jinak nejlepším kodekem, který má. Zvuk zůstane"
-        " zachovaný, když je nainstalovaný ffmpeg; bez ffmpeg vyjde video bez zvuku."
     ),
 }
 
