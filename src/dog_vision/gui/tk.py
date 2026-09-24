@@ -144,6 +144,8 @@ class Tooltip:
     def _show(self) -> None:
         self.pending = None
         self.window = tk.Toplevel(self.widget)
+        # Hidden until placed: measuring its size maps it, at the screen's top left corner.
+        self.window.withdraw()
         self.window.wm_overrideredirect(True)
         tk.Label(
             self.window,
@@ -166,6 +168,7 @@ class Tooltip:
         if y + height > self.widget.winfo_screenheight():
             y -= height + 32
         self.window.wm_geometry(f"+{max(0, x)}+{max(0, y)}")
+        self.window.deiconify()
 
     def hide(self, _event: tk.Event | None = None) -> None:
         if self.pending is not None:
