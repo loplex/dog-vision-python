@@ -343,8 +343,8 @@ That catches differences in colour and in sharpness alike.
 - `uv run check_docs.py` checks this README against the code: the species table with its S-cone
   shares and sources, the relative links and anchors, the neutral points quoted above, and that the
   test-chart image is what the code renders.
-  It also checks that each translation in [`i18n.py`](i18n.py) names every species, and that
-  every English text it translates still occurs in the code.
+  It also checks that each translation in [`i18n.py`](i18n.py) names every species and describes
+  every label, and that every English text it translates still occurs in the code.
 
 ## References
 

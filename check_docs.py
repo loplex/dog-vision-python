@@ -9,12 +9,13 @@
 - Every relative link points at an existing file, and every #anchor at a heading.
 - The neutral points quoted under "What it cannot show" still hold for the model.
 - docs/species-grid.png is what render_species_grid.py renders from the current code.
-- Every language in i18n names every species, and every English text it translates still
-  occurs in the code, so none silently stays English.
+- Every language in i18n names every species and describes every label, and every English
+  text it translates still occurs in the code, so none silently stays English.
 
 External URLs are not fetched. Exits non-zero and names each mismatch.
 """
 
+import ast
 import re
 import sys
 from pathlib import Path
@@ -22,6 +23,7 @@ from pathlib import Path
 import dog_vision as dv
 import i18n
 import render_species_grid
+import tk_window
 
 ROOT = Path(__file__).parent
 
@@ -117,15 +119,25 @@ def check_neutral_points() -> list[str]:
     return errors
 
 
+def string_constants(path: Path) -> set[str]:
+    """Every string literal in a Python file, with implicitly concatenated parts joined as Python joins them."""
+    tree = ast.parse(path.read_text())
+    return {node.value for node in ast.walk(tree) if isinstance(node, ast.Constant) and isinstance(node.value, str)}
+
+
 def check_translations() -> list[str]:
     errors = []
-    code = (ROOT / "dog_vision.py").read_text() + (ROOT / "tk_window.py").read_text()
+    code = string_constants(ROOT / "dog_vision.py") | string_constants(ROOT / "tk_window.py")
     for name, language in i18n.LANGUAGES.items():
         if language.species and list(language.species) != list(dv.SPECIES):
             errors.append(f"i18n language {name} names {list(language.species)}, SPECIES has {list(dv.SPECIES)}")
         for english in language.texts:
-            if f'"{english}"' not in code:
+            if english not in code:
                 errors.append(f"i18n language {name} translates {english!r}, which the code no longer contains")
+        if language.texts:
+            for label, english in {**dv.FACT_DESCRIPTIONS, **tk_window.DESCRIPTIONS}.items():
+                if english not in language.texts:
+                    errors.append(f"i18n language {name} has no translation of the description of {label!r}")
     return errors
 
 
