@@ -25,6 +25,7 @@ TOOLTIP_WIDTH = 380  # pixels a tooltip's text wraps at
 # What the open dialog lists; Tk matches patterns case-sensitively on some systems, so both cases.
 FILE_EXTENSIONS = ["jpg", "jpeg", "png", "bmp", "tif", "tiff", "webp", "mp4", "mov", "m4v", "avi", "mkv", "webm"]
 MIN_LIST_ROWS = 4  # rows of the species list the window keeps, however many sections are open
+FACT_WIDTH = 190  # pixels a species fact wraps at
 PERCENT_SLIDERS = {"adaptation": "Adaptation to scene [%]", "strength": "Simulation strength [%]"}
 
 # What a control does, shown while the pointer rests on it; keyed by the control's own text.
@@ -275,7 +276,8 @@ def run(session: LiveSession) -> None:
     status.pack(side="left", padx=(24, 0))
 
     side = ttk.Frame(root, padding=10)
-    side.grid(row=0, column=1, rowspan=2, sticky="ns")
+    side.grid(row=0, column=1, rowspan=2, sticky="nsew")
+    side.columnconfigure(0, weight=1)
     side.rowconfigure(1, weight=1)
     section_font = font.nametofont("TkDefaultFont").copy()
     section_font.configure(weight="bold")
@@ -331,7 +333,7 @@ def run(session: LiveSession) -> None:
             name = ttk.Label(facts_frame, text=label, foreground="#555555")
             name.grid(row=row, column=0, sticky="nw", padx=(0, 8))
             Tooltip(name, lambda description=description: description)
-            ttk.Label(facts_frame, text=value, wraplength=190).grid(row=row, column=1, sticky="w")
+            ttk.Label(facts_frame, text=value, wraplength=FACT_WIDTH).grid(row=row, column=1, sticky="w")
 
     simulation = Section(side, section_font, is_open=True, on_toggle=keep_list_rows)
     text(simulation.title, "Simulation")
@@ -447,6 +449,29 @@ def run(session: LiveSession) -> None:
             status.configure(text=_("Cannot open camera {index}").format(index=session.camera_index))
 
     text(ttk.Button(side, command=reset), "Reset (r)").grid(row=6, column=0, sticky="w", pady=(12, 0))
+    sections = (facts_section, simulation, acuity_section, view_section)
+
+    def fix_panel_width() -> None:
+        """Keep the panel as wide as it is with every section open, for any species.
+
+        Grid gives the panel the width its open sections ask for and the images the rest, so
+        without this the images would narrow and widen as sections open and close.
+        """
+        # Each column of the facts as wide as any species needs it, from labels measured but never shown.
+        rows = [row for name in session.species_names for row in session.species_facts(name)]
+        for column, texts in enumerate(({label for label, _v, _d in rows}, {value for _l, value, _d in rows})):
+            probes = [ttk.Label(facts_frame, text=text, wraplength=FACT_WIDTH) for text in texts]
+            facts_frame.columnconfigure(column, minsize=max(probe.winfo_reqwidth() for probe in probes))
+            for probe in probes:
+                probe.destroy()
+        closed = [section for section in sections if not section.is_open]
+        for section in closed:
+            section.body.grid()
+        root.columnconfigure(1, minsize=0)
+        root.update_idletasks()
+        root.columnconfigure(1, minsize=side.winfo_reqwidth())
+        for section in closed:
+            section.body.grid_remove()
 
     # Menu entries are not widgets, so they are translated again by their place in the menu.
     translated_entries: list[tuple[tk.Menu, int, str]] = []
@@ -496,6 +521,7 @@ def run(session: LiveSession) -> None:
         left.configure(values=[_("original"), *session.species_labels])
         status.configure(text="")
         show_params()  # puts back the selections the new items dropped, and the facts
+        fix_panel_width()  # the texts have new widths
 
     language_menu = tk.Menu(menu_bar, tearoff=False)
     entry(menu_bar, "cascade", "Language", menu=language_menu)
@@ -544,6 +570,7 @@ def run(session: LiveSession) -> None:
         root.after(FRAME_INTERVAL_MS, tick)
 
     show_params()
+    fix_panel_width()
     keep_list_rows()
     species.focus_set()
     tick()

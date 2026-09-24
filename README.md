@@ -79,7 +79,8 @@ video is encoded with the first of these that works on the machine:
 
 The images are on the left, with a line under them saying what each shows, and the controls of the
 simulation on the right.
-The images follow the window's size; the controls keep theirs.
+The images follow the window's size; the controls keep theirs, as wide as with every section open,
+so opening or closing one does not resize the images.
 What works on the window as a whole — the source, saving, the language — is in the menu bar, and a
 status bar at the bottom says what is shown, how a conversion stands and what the last action did.
 The controls are grouped into sections, and a click on a section's title opens or closes it.

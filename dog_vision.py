@@ -863,9 +863,9 @@ class LiveSession:
         self.params = dataclasses.replace(self.initial)
         self.compare = self.initial_compare
 
-    def species_facts(self) -> list[tuple[str, str, str]]:
-        """What the simulation knows about the current species, as (label, value, description) rows."""
-        return species_facts(self.params.species, self.language)
+    def species_facts(self, species: str | None = None) -> list[tuple[str, str, str]]:
+        """What the simulation knows about a species, the current one by default, as (label, value, description) rows."""
+        return species_facts(species or self.params.species, self.language)
 
     def save_snapshot(self) -> str | None:
         """Write the last rendered view to the working directory and return the file name."""
