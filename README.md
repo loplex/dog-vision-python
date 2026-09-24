@@ -2,6 +2,10 @@
 
 *A camera feed or a photo, shown with the colours a dog — or another animal — can tell apart.*
 
+![Red and yellow-green apples as they are, and as a dog, a cat, a protanope, a deuteranope and a
+harbour seal see them: the red and the yellow-green merge for every dichromat, and all is grey for
+the seal](docs/apples-species.png)
+
 - [Running it](#running-it) — camera, photo, video, `--window`, `--species`, `--compare`, `--difference`,
   `--adaptation`, `--strength`, `--chroma-scale`, `--acuity`, `--fov`.
 - [The camera window](#the-camera-window) — the species list, sliders, menus, keys, language and tooltips.
@@ -293,6 +297,9 @@ image as it is, since nothing merges: `rnl` is the only way it looks different.
 (Caves & Johnsen 2018): the image is filtered with the modulation transfer function
 exp(−3.56 (f / acuity)²), f in cycles per degree, which is a Gaussian blur in linear light.
 
+![A sticker on an apple, with the photo taken to span 30°: a human reads it as in the original,
+while for a dog the print blurs away](docs/apples-acuity.png)
+
 Acuity in cycles per degree, where a measurement was found:
 
 | `--species`          | Side by side [c/°] | One above another [c/°] | Source                                     |
@@ -345,6 +352,9 @@ Acuity in cycles per degree, where a measurement was found:
 - **Red** where they differ by more than one just-noticeable difference, deeper the larger the
   difference; the caption gives the share of pixels that do.
 
+![The apples as a deuteranope and as a dog see them, and the map marking the red apples, which the
+dog sees in a slightly different shade](docs/apples-difference.png)
+
 It compares the two images as a human sees them, in CIELAB, where one just-noticeable difference is
 about ΔE\*ab 2.3 (Mahy et al. 1994).
 That catches differences in colour and in sharpness alike.
@@ -388,7 +398,10 @@ That catches differences in colour and in sharpness alike.
   is preserved, that the output excites the cones exactly as the input does, and the neutral point.
 - `uv run check_docs.py` checks this README against the code: the species table with its S-cone
   shares and sources, the relative links and anchors, the neutral points quoted above, and that the
-  test-chart image is what the code renders.
+  test chart and the apple figures are what the code renders
+  ([`render_species_grid.py`](render_species_grid.py), [`render_photo_figures.py`](render_photo_figures.py)).
+- The apple photo is [*Shiny red apples*](https://commons.wikimedia.org/wiki/File:Shiny_red_apples.jpg)
+  by Leon Brooks, released into the public domain.
   It also checks that each translation in [`i18n.py`](i18n.py) names every species and describes
   every label, and that every English text it translates still occurs in the code.
 

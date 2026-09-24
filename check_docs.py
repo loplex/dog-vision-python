@@ -8,7 +8,8 @@
 - The acuity table does the same for ACUITY.
 - Every relative link points at an existing file, and every #anchor at a heading.
 - The neutral points quoted under "What it cannot show" still hold for the model.
-- docs/species-grid.png is what render_species_grid.py renders from the current code.
+- docs/species-grid.png is what render_species_grid.py renders from the current code, and the
+  apple figures are what render_photo_figures.py does.
 - Every language in i18n names every species and describes every label, and every English
   text it translates still occurs in the code, so none silently stays English.
 
@@ -22,6 +23,7 @@ from pathlib import Path
 
 import dog_vision as dv
 import i18n
+import render_photo_figures
 import render_species_grid
 import tk_window
 
@@ -147,6 +149,8 @@ def main() -> int:
     errors = check_species_table(text) + check_acuity_table(text) + check_links(readme) + check_neutral_points() + check_translations()
     if not render_species_grid.matches_file():
         errors.append("docs/species-grid.png is out of date; run: uv run render_species_grid.py")
+    for name in render_photo_figures.stale():
+        errors.append(f"docs/{name} is out of date; run: uv run render_photo_figures.py")
     for error in errors:
         print(error, file=sys.stderr)
     print(f"{len(errors)} problem(s)" if errors else "README.md matches the code")
