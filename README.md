@@ -16,7 +16,7 @@ the seal](docs/apples-species.png)
 - [Acuity](#acuity) — blurring to what each species resolves, and when that shows.
 - [Map of differences](#map-of-differences) — where two views differ noticeably, and by what measure.
 - [What it cannot show](#what-it-cannot-show) — limits, grouped by whether they can be lifted.
-- [Checking it](#checking-it) — `--info` and `check_docs.py`.
+- [Checking it](#checking-it) — `--info`, `check_docs.py` and `lint-imports`.
 - [References](#references)
 
 ## Running it
@@ -166,8 +166,8 @@ Everything else sits in `LiveSession` in [`session.py`](src/dog_vision/core/sess
   window's own texts in it.
 - `reset()`, `save_snapshot()` and `error` cover the buttons and a camera that stops.
 
-A window in another toolkit is a module with the same `run(session)` function; `main()` in
-`cli.py` imports the window in one line.
+A window in another toolkit is a module with the same `run(session)` function beside `gui/tk.py`;
+`main()` in `cli.py` imports the window in one line.
 
 ## Species
 
@@ -406,6 +406,8 @@ That catches differences in colour and in sharpness alike.
   shares and sources, the relative links and anchors, the neutral points quoted above, and that the
   test chart and the apple figures are what the code renders
   ([`render_species_grid.py`](tools/render_species_grid.py), [`render_photo_figures.py`](tools/render_photo_figures.py)).
+- `uv run lint-imports` checks that the code keeps its layers: `dog_vision.core` imports neither the
+  window nor the command line, and `dog_vision.gui` does not import the command line.
 - The apple photo is [*Shiny red apples*](https://commons.wikimedia.org/wiki/File:Shiny_red_apples.jpg)
   by Leon Brooks, released into the public domain.
   It also checks that each translation in [`i18n.py`](src/dog_vision/core/i18n.py) names every species and describes

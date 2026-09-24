@@ -16,3 +16,16 @@ build-backend = "uv_build"
 [tool.uv]
 # uv's own Python builds ship a Tk without Xft, which draws text unantialiased.
 python-preference = "system"
+
+[dependency-groups]
+dev = [
+    "import-linter>=2.15",
+]
+
+[tool.importlinter]
+root_package = "dog_vision"
+
+[[tool.importlinter.contracts]]
+name = "The command line uses the window, the window the core, never the other way"
+type = "layers"
+layers = ["dog_vision.cli", "dog_vision.gui", "dog_vision.core"]
