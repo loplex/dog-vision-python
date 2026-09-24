@@ -27,6 +27,7 @@ FILE_EXTENSIONS = ["jpg", "jpeg", "png", "bmp", "tif", "tiff", "webp", "mp4", "m
 MIN_LIST_ROWS = 4  # rows of the species list the panel keeps before it scrolls instead
 WHEEL_LINES = 3  # lines of text the panel scrolls by per notch of the mouse wheel
 FACT_WIDTH = 190  # pixels a species fact wraps at
+FACT_GAP = 8  # pixels between a species fact's name and its value
 PERCENT_SLIDERS = {"adaptation": "Adaptation to scene [%]", "strength": "Simulation strength [%]"}
 
 # What a control does, shown while the pointer rests on it; keyed by the control's own text.
@@ -371,7 +372,7 @@ def run(session: LiveSession) -> None:
             child.destroy()
         for row, (label, value, description) in enumerate(session.species_facts()):
             name = ttk.Label(facts_frame, text=label, foreground="#555555")
-            name.grid(row=row, column=0, sticky="nw", padx=(0, 8))
+            name.grid(row=row, column=0, sticky="nw", padx=(0, FACT_GAP))
             Tooltip(name, lambda description=description: description)
             ttk.Label(facts_frame, text=value, wraplength=FACT_WIDTH).grid(row=row, column=1, sticky="w")
         fit_panel()  # species have more or fewer facts
@@ -502,7 +503,9 @@ def run(session: LiveSession) -> None:
         rows = [row for name in session.species_names for row in session.species_facts(name)]
         for column, texts in enumerate(({label for label, _v, _d in rows}, {value for _l, value, _d in rows})):
             probes = [ttk.Label(facts_frame, text=text, wraplength=FACT_WIDTH) for text in texts]
-            facts_frame.columnconfigure(column, minsize=max(probe.winfo_reqwidth() for probe in probes))
+            # A column's minsize includes the padding of what it holds; the names are padded.
+            gap = FACT_GAP if column == 0 else 0
+            facts_frame.columnconfigure(column, minsize=max(probe.winfo_reqwidth() for probe in probes) + gap)
             for probe in probes:
                 probe.destroy()
         closed = [section for section in sections if not section.is_open]
