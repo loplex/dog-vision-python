@@ -11,7 +11,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from dog_vision import cli as dv
+from dog_vision.core import facts, imaging, model, species
 
 OUTPUT = Path(__file__).parent / "docs" / "species-grid.png"
 STRIP_WIDTH = 400
@@ -40,11 +40,11 @@ def render() -> np.ndarray:
     gap = lambda: np.full((source.shape[0], 8, 3), 255, np.uint8)  # noqa: E731
     rows = [np.hstack([label("", 24), label("fixed", 24, STRIP_WIDTH), gap()[:24], label("rnl", 24, STRIP_WIDTH)])]
     rows.append(np.hstack([label("original", source.shape[0]), source, gap(), source]))
-    for species in dv.SPECIES:
-        fixed = dv.simulate(source, dv.Params(species))
-        rnl = dv.simulate(source, dv.Params(species, chroma_scale="rnl"))
+    for name in species.SPECIES:
+        fixed = imaging.simulate(source, model.Params(name))
+        rnl = imaging.simulate(source, model.Params(name, chroma_scale="rnl"))
         rows.append(np.full((4, rows[0].shape[1], 3), 255, np.uint8))
-        rows.append(np.hstack([label(dv.species_label(species), source.shape[0]), fixed, gap(), rnl]))
+        rows.append(np.hstack([label(facts.species_label(name), source.shape[0]), fixed, gap(), rnl]))
     return np.vstack(rows)
 
 

@@ -18,7 +18,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from dog_vision import cli as dv
+from dog_vision.core import facts, imaging, model
 
 DOCS = Path(__file__).parent / "docs"
 PHOTO = DOCS / "shiny-red-apples.jpg"
@@ -55,7 +55,7 @@ def row(cells: list[np.ndarray]) -> np.ndarray:
 def species_figure(photo: np.ndarray) -> np.ndarray:
     small = shrink(photo)
     cells = [captioned(small, "original")]
-    cells += [captioned(dv.simulate(small, dv.Params(species)), dv.species_label(species)) for species in SPECIES_SHOWN]
+    cells += [captioned(imaging.simulate(small, model.Params(species)), facts.species_label(species)) for species in SPECIES_SHOWN]
     top, bottom = row(cells[:3]), row(cells[3:])
     return np.vstack([top, np.full((8, top.shape[1], 3), 255, np.uint8), bottom])
 
@@ -64,18 +64,18 @@ def acuity_figure(photo: np.ndarray) -> np.ndarray:
     """The blur is set by the whole photo's width, so it is applied to the whole photo and then cropped."""
     cells = [captioned(photo[STICKER], "original")]
     for species in ("human", "dog"):
-        blurred = dv.simulate(photo, dv.Params(species, acuity=True, field_of_view=FIELD_OF_VIEW))
-        cells.append(captioned(blurred[STICKER], f"{dv.species_label(species)}, {FIELD_OF_VIEW:g} deg across"))
+        blurred = imaging.simulate(photo, model.Params(species, acuity=True, field_of_view=FIELD_OF_VIEW))
+        cells.append(captioned(blurred[STICKER], f"{facts.species_label(species)}, {FIELD_OF_VIEW:g} deg across"))
     return row(cells)
 
 
 def difference_figure(photo: np.ndarray) -> np.ndarray:
     small = shrink(photo)
-    left, right = dv.simulate(small, dv.Params("deuteranope")), dv.simulate(small, dv.Params("dog"))
-    difference, share = dv.difference_map(left, right)
+    left, right = imaging.simulate(small, model.Params("deuteranope")), imaging.simulate(small, model.Params("dog"))
+    difference, share = imaging.difference_map(left, right)
     return row([
-        captioned(left, dv.species_label("deuteranope")),
-        captioned(right, dv.species_label("dog")),
+        captioned(left, facts.species_label("deuteranope")),
+        captioned(right, facts.species_label("dog")),
         captioned(difference, f"red: noticeably different ({share:.0%} of pixels)"),
     ])
 

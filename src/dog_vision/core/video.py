@@ -1,4 +1,4 @@
-"""Writing a converted video with the best method the system has.
+"""Converting a photo or a video, and writing the video with the best method the system has.
 
 With ffmpeg installed, the first encoder in FFMPEG_ENCODERS that actually encodes a
 frame on this machine is used, and the sound of the original is carried over. A
@@ -15,6 +15,8 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+
+from dog_vision.core import i18n
 
 # ffmpeg encoders, best first: H.265 before H.264, software before hardware, as the
 # software encoders give the better picture for the size. None stands for a hardware
@@ -160,3 +162,60 @@ class VideoWriter:
         self._drain.join()
         message = b"".join(self._errors).decode(errors="replace").strip()
         raise RuntimeError(f"ffmpeg ({self.encoder}) failed: {message}")
+
+
+def converted_path(path: Path, is_video: bool) -> Path:
+    return path.with_suffix(".dog.mp4" if is_video else ".dog.png")
+
+
+def convert_video(path: Path, out_path: Path, render, progress=None, cancelled=None) -> VideoWriter | None:
+    """Write render(frame) for every frame of the video at path, at its frame rate.
+
+    progress, if given, is called with the share done; cancelled, if given, is asked
+    before each frame and makes the conversion stop and remove its file. Returns the
+    writer, which says how the video was written, or None if cancelled.
+    """
+    capture = cv2.VideoCapture(str(path))
+    if not capture.isOpened():
+        raise RuntimeError(f"Cannot read video: {path}")
+    fps = capture.get(cv2.CAP_PROP_FPS) or 30.0
+    total = max(1, int(capture.get(cv2.CAP_PROP_FRAME_COUNT)))
+    writer = None
+    try:
+        done = 0
+        while True:
+            if cancelled is not None and cancelled():
+                if writer is not None:
+                    writer.abort()
+                return None
+            ok, frame = capture.read()
+            if not ok:
+                break
+            image = render(frame)
+            if writer is None:
+                writer = VideoWriter(out_path, path, image.shape[1], image.shape[0], fps)
+            writer.write(image)
+            done += 1
+            if progress is not None:
+                progress(min(1.0, done / total))
+        if writer is None:
+            raise RuntimeError(f"No frames in video: {path}")
+        writer.close()
+        return writer
+    except BaseException:
+        if writer is not None:
+            writer.abort()
+        raise
+    finally:
+        capture.release()
+
+
+def writer_description(writer: VideoWriter, language: str = "en") -> str:
+    """How a video was written, e.g. "H.265 (libx265), with the original sound"."""
+    template = {
+        "kept": "{format} ({encoder}), with the original sound",
+        "none": "{format} ({encoder}); the original has no sound",
+        "lost": "{format} ({encoder}), without sound: ffmpeg is not installed",
+        "unknown": "{format} ({encoder})",
+    }[writer.sound]
+    return i18n.translate(template, language).format(format=writer.format_name, encoder=writer.encoder)

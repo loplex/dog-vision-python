@@ -17,7 +17,7 @@ import cv2
 import numpy as np
 
 if TYPE_CHECKING:
-    from dog_vision.cli import LiveSession
+    from dog_vision.core.session import LiveSession
 
 FRAME_INTERVAL_MS = 15
 TOOLTIP_DELAY_MS = 500

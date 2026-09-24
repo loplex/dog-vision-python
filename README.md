@@ -127,7 +127,7 @@ Resting the pointer on a label, a box or a button shows what it means, in a few 
 ### The window starts in the system's language, looked up as gettext does
 
 The window speaks English and Czech.
-A language is one entry in `LANGUAGES` in [`i18n.py`](src/dog_vision/i18n.py): its name, its decimal point, and
+A language is one entry in `LANGUAGES` in [`i18n.py`](src/dog_vision/core/i18n.py): its name, its decimal point, and
 its translations, each keyed by the English text as in gettext.
 
 The first of these that is set decides, and a language the window does not speak gives English:
@@ -145,7 +145,7 @@ Only the window is translated: `--help`, `--info` and what a photo conversion pr
 
 The window lives in [`tk_window.py`](src/dog_vision/tk_window.py) and does nothing but lay out widgets and forward
 events.
-Everything else sits in `LiveSession` in [`cli.py`](src/dog_vision/cli.py):
+Everything else sits in `LiveSession` in [`session.py`](src/dog_vision/core/session.py):
 
 - `render()` returns the current view as an RGB array, or `None` before the first frame.
   The camera or a video is read on a thread of its own, so a GUI can call it from any timer.
@@ -257,7 +257,7 @@ The method is the one Brettel, Viénot & Mollon (1997) use for human dichromats:
 6. The saturation of the result is set by one of two [scales](#colour-saturation).
 
 The whole transform is one 3×3 matrix on linear RGB.
-The docstring of [`cli.py`](src/dog_vision/cli.py) states it as formulas.
+The docstring of [`model.py`](src/dog_vision/core/model.py) states it as formulas.
 
 ## Colour saturation
 
@@ -408,7 +408,7 @@ That catches differences in colour and in sharpness alike.
   ([`render_species_grid.py`](render_species_grid.py), [`render_photo_figures.py`](render_photo_figures.py)).
 - The apple photo is [*Shiny red apples*](https://commons.wikimedia.org/wiki/File:Shiny_red_apples.jpg)
   by Leon Brooks, released into the public domain.
-  It also checks that each translation in [`i18n.py`](src/dog_vision/i18n.py) names every species and describes
+  It also checks that each translation in [`i18n.py`](src/dog_vision/core/i18n.py) names every species and describes
   every label, and that every English text it translates still occurs in the code.
 
 ## References
