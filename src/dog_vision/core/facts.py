@@ -43,15 +43,13 @@ FACT_DESCRIPTIONS = {
     "Cone peaks": (
         "The wavelength each kind of cone is most sensitive to: S for short, M for middle and L for long"
         " wavelengths. A dichromat's longer cone is listed as L whatever its source calls it."
+        "\n\nThe study the peaks are taken from is in brackets; the README lists every source in full under"
+        " References. A note after the citation marks a value that is not simply measured, such as a cone"
+        " shifted on purpose or one assumed."
         "\n\nEach cone is modelled from its peak alone, with the pigment template of Govardovskii et al. (2000)."
         " Its sensitivity is about 100 nm wide at half height, which is why a shift of a few nanometres"
         " between species changes little."
         "\n\nA human's cones peak at 420.7, 530.3 and 558.9 nm."
-    ),
-    "Peaks from": (
-        "The study the cone peaks are taken from; the README lists every source in full under References."
-        "\n\nA note after the citation marks a value that is not simply measured, such as a cone shifted on"
-        " purpose or one assumed."
     ),
     "S cones": (
         "The share of all cones that are S cones, with its source. Where the source reports a range across"
@@ -123,8 +121,7 @@ def species_facts(species: str, language: str = "en") -> list[tuple[str, tuple[s
     cones = [f"{name} {i18n.number(peak, 'g', language)} nm" for name, peak in zip(names, peaks)]
     facts = [
         ("Colour vision", [cone_types.format(kind=_(COLOUR_VISION[n]), n=n)]),
-        ("Cone peaks", [f"{cone}," for cone in cones[:-1]] + cones[-1:]),
-        ("Peaks from", pieces(_(PEAKS_FROM[species]))),
+        ("Cone peaks", [f"{cone}," for cone in cones[:-1]] + cones[-1:] + pieces(f"({_(PEAKS_FROM[species])})")),
     ]
     if n == 1:
         facts += [("RNL scale", [_("nothing to scale")])]

@@ -67,7 +67,6 @@ CZECH = {
     "{kind}, 1 cone type": "{kind}, 1 typ čípků",
     "{kind}, {n} cone types": "{kind}, {n} typy čípků",
     "Cone peaks": "Maxima čípků",
-    "Peaks from": "Zdroj maxim",
     "S cones": "Čípky S",
     "{share} of cones": "{share} čípků",
     "L : M cones": "Poměr L : M",
@@ -110,6 +109,9 @@ CZECH = {
     (
         "The wavelength each kind of cone is most sensitive to: S for short, M for middle and L for long"
         " wavelengths. A dichromat's longer cone is listed as L whatever its source calls it."
+        "\n\nThe study the peaks are taken from is in brackets; the README lists every source in full under"
+        " References. A note after the citation marks a value that is not simply measured, such as a cone"
+        " shifted on purpose or one assumed."
         "\n\nEach cone is modelled from its peak alone, with the pigment template of Govardovskii et al."
         " (2000). Its sensitivity is about 100 nm wide at half height, which is why a shift of a few"
         " nanometres between species changes little."
@@ -117,19 +119,13 @@ CZECH = {
     ): (
         "Vlnová délka, na kterou je každý druh čípku nejcitlivější: S pro krátké, M pro střední a L pro"
         " dlouhé vlnové délky. Delší čípek dichromata je uveden jako L, ať ho zdroj nazývá jakkoli."
+        "\n\nV závorce je studie, ze které jsou maxima převzata; README uvádí všechny zdroje celé v části"
+        " References. Poznámka za citací označuje hodnotu, která není prostě změřená, třeba záměrně posunutý"
+        " čípek nebo předpokládanou hodnotu."
         "\n\nKaždý čípek je modelován jen z tohoto maxima, šablonou pigmentu, kterou popsali Govardovskii et"
         " al. (2000). Jeho citlivost je v polovině výšky široká asi 100 nm, a proto posun o pár nanometrů"
         " mezi druhy změní málo."
         "\n\nLidské čípky mají maxima 420,7; 530,3 a 558,9 nm."
-    ),
-    (
-        "The study the cone peaks are taken from; the README lists every source in full under References."
-        "\n\nA note after the citation marks a value that is not simply measured, such as a cone shifted on"
-        " purpose or one assumed."
-    ): (
-        "Studie, ze které jsou maxima čípků převzata; README uvádí všechny zdroje celé v části References."
-        "\n\nPoznámka za citací označuje hodnotu, která není prostě změřená, třeba záměrně posunutý čípek nebo"
-        " předpokládanou hodnotu."
     ),
     (
         "The share of all cones that are S cones, with its source. Where the source reports a range across"
