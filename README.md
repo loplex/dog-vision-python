@@ -81,6 +81,8 @@ The images are on the left, with a line under them saying what each shows, and t
 simulation on the right.
 The images follow the window's size; the controls keep theirs, as wide as with every section open,
 so opening or closing one does not resize the images.
+When the open sections do not fit the window's height, the controls get a scrollbar and the species
+list keeps four rows.
 *View › Side panel* or F9 hides the controls, and the images take their room.
 What works on the window as a whole — the source, saving, the language — is in the menu bar, and a
 status bar at the bottom says what is shown, how a conversion stands and what the last action did.
@@ -96,6 +98,7 @@ facts about the dog and the simulation's controls on the right](docs/window.png)
 | *Species* list                  | a click or the arrow keys pick the animal           |
 | *Selected species* section      | its cones, their sources and its RNL factors        |
 | mouse wheel over the list       | scrolls it                                          |
+| mouse wheel over other controls | scrolls them, when they have a scrollbar            |
 | *Adaptation to scene* slider    | same as `--adaptation`, in percent                  |
 | *Simulation strength* slider    | same as `--strength`, in percent                    |
 | *Colour saturation* choice      | same as `--chroma-scale`                            |

@@ -24,7 +24,8 @@ TOOLTIP_DELAY_MS = 500
 TOOLTIP_WIDTH = 380  # pixels a tooltip's text wraps at
 # What the open dialog lists; Tk matches patterns case-sensitively on some systems, so both cases.
 FILE_EXTENSIONS = ["jpg", "jpeg", "png", "bmp", "tif", "tiff", "webp", "mp4", "mov", "m4v", "avi", "mkv", "webm"]
-MIN_LIST_ROWS = 4  # rows of the species list the window keeps, however many sections are open
+MIN_LIST_ROWS = 4  # rows of the species list the panel keeps before it scrolls instead
+WHEEL_LINES = 3  # lines of text the panel scrolls by per notch of the mouse wheel
 FACT_WIDTH = 190  # pixels a species fact wraps at
 PERCENT_SLIDERS = {"adaptation": "Adaptation to scene [%]", "strength": "Simulation strength [%]"}
 
@@ -275,8 +276,20 @@ def run(session: LiveSession) -> None:
     status = ttk.Label(status_bar)
     status.pack(side="left", padx=(24, 0))
 
-    side = ttk.Frame(root, padding=10)
-    side.grid(row=0, column=1, rowspan=2, sticky="nsew")
+    # The controls lie on a canvas, the Tk widget that scrolls anything, for when the open sections do not fit.
+    panel = ttk.Frame(root)
+    panel.grid(row=0, column=1, rowspan=2, sticky="nsew")
+    panel.rowconfigure(0, weight=1)
+    panel_canvas = tk.Canvas(
+        panel, borderwidth=0, highlightthickness=0, background=ttk.Style(root).lookup("TFrame", "background")
+    )
+    panel_canvas.grid(row=0, column=0, sticky="nsew")
+    panel_scrollbar = ttk.Scrollbar(panel, orient="vertical", command=panel_canvas.yview)
+    panel_canvas.configure(yscrollcommand=panel_scrollbar.set)
+    # The scrollbar's room stays while it is hidden, so that showing it does not narrow the images.
+    panel.columnconfigure(1, minsize=panel_scrollbar.winfo_reqwidth())
+    side = ttk.Frame(panel_canvas, padding=10)
+    side_item = panel_canvas.create_window(0, 0, window=side, anchor="nw")
     side.columnconfigure(0, weight=1)
     side.rowconfigure(1, weight=1)
     section_font = font.nametofont("TkDefaultFont").copy()
@@ -308,19 +321,46 @@ def run(session: LiveSession) -> None:
 
     species.bind("<Configure>", keep_selection_in_view, add="+")
 
-    def keep_list_rows() -> None:
-        """Keep the window tall enough for MIN_LIST_ROWS of the species list beside the open sections.
+    def fit_panel() -> None:
+        """Stretch the controls to the panel's height, or scroll them when the open sections need more.
 
-        The list is the only part of the panel that stretches, so without a minimum an opened
-        section takes its room until one row is left. Only the panel counts: the images shrink.
+        The species list is the only part that stretches, so without a minimum an opened
+        section would take its room until one row is left; it keeps MIN_LIST_ROWS instead.
         """
         root.update_idletasks()
-        row = font.Font(font=species.cget("font")).metrics("linespace")
-        panel = side.winfo_reqheight() - species.winfo_reqheight() + MIN_LIST_ROWS * row
-        root.minsize(1, panel + status_rule.winfo_reqheight() + status_bar.winfo_reqheight())
-    species.insert("end", *session.species_labels)
+        # The list asks for its "height" in rows plus its border; a row's pitch is more than the font's line.
+        rows = int(species.cget("height"))
+        border = 2 * (int(species.cget("borderwidth")) + int(species.cget("highlightthickness")))
+        row = (species.winfo_reqheight() - border) / rows
+        needed = side.winfo_reqheight() - round((rows - MIN_LIST_ROWS) * row)
+        shown = panel_canvas.winfo_height()
+        height = max(needed, shown)
+        # Asking for the whole height sizes the window the first frame opens; later the window keeps its size.
+        panel_canvas.configure(height=side.winfo_reqheight(), scrollregion=(0, 0, 0, height))
+        panel_canvas.itemconfigure(side_item, width=panel_canvas.winfo_width(), height=height)
+        if height > shown:
+            panel_scrollbar.grid(row=0, column=1, sticky="ns")
+        else:
+            panel_scrollbar.grid_remove()
 
-    facts_section = Section(side, section_font, is_open=True, on_toggle=keep_list_rows)
+    panel_canvas.bind("<Configure>", lambda _event: fit_panel(), add="+")
+
+    def scroll_panel(event: tk.Event) -> None:
+        """Scroll the controls with the wheel, except over the widgets the wheel already works on."""
+        path = str(event.widget)
+        if not panel_scrollbar.winfo_ismapped() or not path.startswith(str(panel) + "."):
+            return
+        # By path, not widget: a combobox's drop-down list is a Tk widget Python has no object for.
+        if root.tk.call("winfo", "class", path) in ("Listbox", "TCombobox"):
+            return
+        panel_canvas.yview_scroll(-WHEEL_LINES if event.num == 4 or event.delta > 0 else WHEEL_LINES, "units")
+
+    for wheel in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+        root.bind_all(wheel, scroll_panel, add="+")
+    species.insert("end", *session.species_labels)
+    panel_canvas.configure(yscrollincrement=font.Font(font=species.cget("font")).metrics("linespace"))
+
+    facts_section = Section(side, section_font, is_open=True, on_toggle=fit_panel)
     text(facts_section.title, "Selected species")
     facts_section.frame.grid(row=2, column=0, sticky="ew")
     facts_frame = facts_section.body
@@ -334,8 +374,9 @@ def run(session: LiveSession) -> None:
             name.grid(row=row, column=0, sticky="nw", padx=(0, 8))
             Tooltip(name, lambda description=description: description)
             ttk.Label(facts_frame, text=value, wraplength=FACT_WIDTH).grid(row=row, column=1, sticky="w")
+        fit_panel()  # species have more or fewer facts
 
-    simulation = Section(side, section_font, is_open=True, on_toggle=keep_list_rows)
+    simulation = Section(side, section_font, is_open=True, on_toggle=fit_panel)
     text(simulation.title, "Simulation")
     simulation.frame.grid(row=3, column=0, sticky="ew", pady=(10, 0))
     sliders: dict[str, LabelledSlider] = {}
@@ -362,7 +403,7 @@ def run(session: LiveSession) -> None:
         ).pack(anchor="w")
 
     # A section the command line left at its defaults starts closed.
-    acuity_section = Section(side, section_font, is_open=session.params.acuity, on_toggle=keep_list_rows)
+    acuity_section = Section(side, section_font, is_open=session.params.acuity, on_toggle=fit_panel)
     text(acuity_section.title, "Acuity")
     acuity_section.frame.grid(row=4, column=0, sticky="ew", pady=(10, 0))
     acuity_frame = acuity_section.body
@@ -377,7 +418,7 @@ def run(session: LiveSession) -> None:
     text(field_of_view.label, "Image spans [degrees]")
     field_of_view.frame.grid(row=1, column=0, sticky="ew", pady=(4, 0))
 
-    view_section = Section(side, section_font, is_open=session.compare is not None or session.difference, on_toggle=keep_list_rows)
+    view_section = Section(side, section_font, is_open=session.compare is not None or session.difference, on_toggle=fit_panel)
     text(view_section.title, "View")
     view_section.frame.grid(row=5, column=0, sticky="ew", pady=(10, 0))
     view = view_section.body
@@ -450,7 +491,6 @@ def run(session: LiveSession) -> None:
 
     text(ttk.Button(side, command=reset), "Reset (r)").grid(row=6, column=0, sticky="w", pady=(12, 0))
     sections = (facts_section, simulation, acuity_section, view_section)
-    panel_width = 0
 
     def fix_panel_width() -> None:
         """Keep the panel as wide as it is with every section open, for any species.
@@ -458,7 +498,6 @@ def run(session: LiveSession) -> None:
         Grid gives the panel the width its open sections ask for and the images the rest, so
         without this the images would narrow and widen as sections open and close.
         """
-        nonlocal panel_width
         # Each column of the facts as wide as any species needs it, from labels measured but never shown.
         rows = [row for name in session.species_names for row in session.species_facts(name)]
         for column, texts in enumerate(({label for label, _v, _d in rows}, {value for _l, value, _d in rows})):
@@ -469,24 +508,20 @@ def run(session: LiveSession) -> None:
         closed = [section for section in sections if not section.is_open]
         for section in closed:
             section.body.grid()
-        root.columnconfigure(1, minsize=0)
         root.update_idletasks()
-        panel_width = side.winfo_reqwidth()
+        panel_canvas.configure(width=side.winfo_reqwidth())
         for section in closed:
             section.body.grid_remove()
-        if panel_shown.get():
-            root.columnconfigure(1, minsize=panel_width)
+        fit_panel()
 
     panel_shown = tk.BooleanVar(value=True)
 
     def show_panel() -> None:
         """Hide or show the whole panel; the images take its room."""
         if panel_shown.get():
-            side.grid()
-            root.columnconfigure(1, minsize=panel_width)
+            panel.grid()
         else:
-            side.grid_remove()
-            root.columnconfigure(1, minsize=0)
+            panel.grid_remove()
 
     def toggle_panel() -> None:
         panel_shown.set(not panel_shown.get())
@@ -595,7 +630,6 @@ def run(session: LiveSession) -> None:
 
     show_params()
     fix_panel_width()
-    keep_list_rows()
     species.focus_set()
     tick()
     root.mainloop()
