@@ -19,8 +19,8 @@ from pathlib import Path
 
 import render_photo_figures
 import render_species_grid
-from dog_vision import tk_window
 from dog_vision.core import facts, i18n, model, species
+from dog_vision.gui import tk as tk_gui
 
 ROOT = Path(__file__).parent
 
@@ -134,7 +134,7 @@ def check_translations() -> list[str]:
             if english not in code:
                 errors.append(f"i18n language {name} translates {english!r}, which the code no longer contains")
         if language.texts:
-            for label, english in {**facts.FACT_DESCRIPTIONS, **tk_window.DESCRIPTIONS}.items():
+            for label, english in {**facts.FACT_DESCRIPTIONS, **tk_gui.DESCRIPTIONS}.items():
                 if english not in language.texts:
                     errors.append(f"i18n language {name} has no translation of the description of {label!r}")
     return errors

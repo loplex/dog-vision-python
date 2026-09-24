@@ -143,8 +143,8 @@ Only the window is translated: `--help`, `--info` and what a photo conversion pr
 
 ## Another GUI toolkit
 
-The window lives in [`tk_window.py`](src/dog_vision/tk_window.py) and does nothing but lay out widgets and forward
-events.
+The window lives in [`gui/tk.py`](src/dog_vision/gui/tk.py) and does nothing but lay out widgets and
+forward events.
 Everything else sits in `LiveSession` in [`session.py`](src/dog_vision/core/session.py):
 
 - `render()` returns the current view as an RGB array, or `None` before the first frame.

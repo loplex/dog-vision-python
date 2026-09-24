@@ -13,7 +13,7 @@ Usage:
     uv run dog-vision --species cat   # another dichromat
     uv run dog-vision --species cat --compare dog   # two species side by side
 
-The live window (dog_vision.tk_window) lists the species on the right; keys: m = toggle
+The live window (dog_vision.gui.tk) lists the species on the right; keys: m = toggle
 side-by-side / simulation only, d = map of differences, o = open a photo or a video,
 r = reset to the command-line values, s = save snapshot, F9 = hide or show the
 controls, q or Esc = quit. The window only drives LiveSession, so another GUI
@@ -154,12 +154,13 @@ def main() -> None:
     elif args.image and not args.window:
         convert_file(args.image, params, args.compare, args.difference)
     else:
-        from dog_vision import tk_window  # the only GUI-specific line in this module
+        # The only GUI-specific line in this module.
+        from dog_vision.gui import tk as tk_gui
 
         session = LiveSession(args.camera, params, args.compare, args.image)
         session.difference = args.difference
         try:
-            tk_window.run(session)
+            tk_gui.run(session)
         finally:
             session.close()
         if session.error:
