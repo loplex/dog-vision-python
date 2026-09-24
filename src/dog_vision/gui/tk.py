@@ -120,19 +120,25 @@ def warn_without_xft(root: tk.Tk) -> None:
 
 
 class Tooltip:
-    """Text that appears beside the pointer while it rests on a widget."""
+    """Text that appears beside the pointer while it rests on a widget, or on a tag's text in a Text widget."""
 
-    def __init__(self, widget: tk.Misc, text) -> None:
+    def __init__(self, widget: tk.Misc, text, tag: str | None = None) -> None:
         self.widget = widget
         self.text = text  # called on showing, so it gives the current language
         self.window: tk.Toplevel | None = None
         self.pending: str | None = None
-        widget.bind("<Enter>", self._schedule, add="+")
-        for event in ("<Leave>", "<ButtonPress>", "<Destroy>"):
-            widget.bind(event, self._hide, add="+")
+        if tag is None:
+            widget.bind("<Enter>", self._schedule, add="+")
+            for event in ("<Leave>", "<ButtonPress>", "<Destroy>"):
+                widget.bind(event, self.hide, add="+")
+        else:
+            # A tag outlives its text, so whoever deletes the text hides the tooltip.
+            widget.tag_bind(tag, "<Enter>", self._schedule)
+            for event in ("<Leave>", "<ButtonPress>"):
+                widget.tag_bind(tag, event, self.hide, add="+")
 
     def _schedule(self, _event: tk.Event) -> None:
-        self._hide()
+        self.hide()
         self.pending = self.widget.after(TOOLTIP_DELAY_MS, self._show)
 
     def _show(self) -> None:
@@ -161,7 +167,7 @@ class Tooltip:
             y -= height + 32
         self.window.wm_geometry(f"+{max(0, x)}+{max(0, y)}")
 
-    def _hide(self, _event: tk.Event | None = None) -> None:
+    def hide(self, _event: tk.Event | None = None) -> None:
         if self.pending is not None:
             self.widget.after_cancel(self.pending)
             self.pending = None
@@ -381,8 +387,31 @@ def run(session: LiveSession) -> None:
     text(facts_section.title, "Selected species")
     facts_section.frame.grid(row=2, column=0, sticky="ew")
     facts_frame = facts_section.body
-    facts_frame.columnconfigure(1, weight=1)
     fact_font = font.nametofont("TkDefaultFont")
+    # Text, not labels, so that the facts can be selected and copied; a tab stop makes the values a column.
+    facts = tk.Text(
+        facts_frame,
+        width=1,  # the column's minsize gives the width
+        wrap="none",
+        font=fact_font,
+        borderwidth=0,
+        highlightthickness=0,
+        padx=0,
+        pady=0,
+        background=ttk.Style(root).lookup("TFrame", "background"),
+        foreground=ttk.Style(root).lookup("TLabel", "foreground") or "black",
+    )
+    facts.grid(row=0, column=0, sticky="ew")
+    facts.tag_configure("name", foreground="#555555")
+    fact_tooltips: list[Tooltip] = []
+    # A disabled Text is focused by a click only on Windows, and without focus Ctrl+C does not reach it.
+    facts.bind("<Button-1>", lambda _event: facts.focus_set(), add="+")
+
+    def select_all_facts() -> str:
+        facts.tag_add("sel", "1.0", "end-1c")
+        return "break"  # Tk's own Ctrl+A goes to the line's start
+
+    facts.bind("<Control-a>", lambda _event: select_all_facts())
     fact_widths: dict[str, int] = {}  # by language
 
     def fact_width() -> int:
@@ -408,13 +437,20 @@ def run(session: LiveSession) -> None:
         return "\n".join(lines)
 
     def show_facts() -> None:
-        for child in facts_frame.winfo_children():
-            child.destroy()
+        for tooltip in fact_tooltips:
+            tooltip.hide()
+        fact_tooltips.clear()
+        facts.configure(state="normal")
+        facts.delete("1.0", "end")
         for row, (label, value, description) in enumerate(session.species_facts()):
-            name = ttk.Label(facts_frame, text=label, foreground="#555555")
-            name.grid(row=row, column=0, sticky="nw", padx=(0, FACT_GAP))
-            Tooltip(name, lambda description=description: description)
-            ttk.Label(facts_frame, text=fact_text(value)).grid(row=row, column=1, sticky="w")
+            tag = f"name{row}"
+            facts.insert("end", "\n" if row else "")
+            facts.insert("end", label, ("name", tag))
+            # A fact's further lines start at the tab stop too, under its first.
+            facts.insert("end", "\t" + fact_text(value).replace("\n", "\n\t"))
+            fact_tooltips.append(Tooltip(facts, lambda description=description: description, tag))
+        lines = int(facts.index("end-1c").split(".")[0])
+        facts.configure(state="disabled", height=lines)
         fit_panel()  # species have more or fewer facts
 
     simulation = Section(side, section_font, is_open=True, on_toggle=fit_panel)
@@ -557,15 +593,12 @@ def run(session: LiveSession) -> None:
         Grid gives the panel the width its open sections ask for and the images the rest, so
         without this the images would narrow and widen as sections open and close.
         """
-        # Each column of the facts as wide as any species needs it, from labels measured but never shown.
+        # The names and the values of the facts, each as wide as any species needs them.
         rows = [row for name in session.species_names for row in session.species_facts(name)]
-        for column, texts in enumerate(({label for label, _v, _d in rows}, {fact_text(value) for _l, value, _d in rows})):
-            probes = [ttk.Label(facts_frame, text=text) for text in texts]
-            # A column's minsize includes the padding of what it holds; the names are padded.
-            gap = FACT_GAP if column == 0 else 0
-            facts_frame.columnconfigure(column, minsize=max(probe.winfo_reqwidth() for probe in probes) + gap)
-            for probe in probes:
-                probe.destroy()
+        names = max(fact_font.measure(label) for label, _v, _d in rows) + FACT_GAP
+        values = max(fact_font.measure(line) for _l, value, _d in rows for line in fact_text(value).split("\n"))
+        facts.configure(tabs=(names,))
+        facts_frame.columnconfigure(0, minsize=names + values)
         closed = [section for section in sections if not section.is_open]
         for section in closed:
             section.body.grid()
@@ -671,6 +704,20 @@ def run(session: LiveSession) -> None:
             )
 
     fill_species_menus()
+
+    # What a right click on the species' facts offers.
+    facts_menu = tk.Menu(facts, tearoff=False)
+    copy_facts = entry(
+        facts_menu, "command", "Copy", command=lambda: facts.event_generate("<<Copy>>"), accelerator="Ctrl+C"
+    )
+    entry(facts_menu, "command", "Select all", command=select_all_facts, accelerator="Ctrl+A")
+
+    def post_facts_menu(event: tk.Event) -> None:
+        facts.focus_set()  # the copy goes to the focused widget
+        enable(facts_menu, copy_facts, bool(facts.tag_ranges("sel")))
+        facts_menu.tk_popup(event.x_root, event.y_root)
+
+    facts.bind("<Button-2>" if root.tk.call("tk", "windowingsystem") == "aqua" else "<Button-3>", post_facts_menu)
 
     language = tk.StringVar(value=session.language)
 

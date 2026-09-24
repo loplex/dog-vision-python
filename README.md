@@ -121,6 +121,8 @@ facts about the dog and the simulation's controls on the right](docs/window.png)
 | *Language* menu                 | the window's language, starting as the system's     |
 
 Resting the pointer on a label, a box or a button shows what it means, in a few paragraphs.
+The facts under *Selected species* are text: a drag selects them, Ctrl+A selects them all, and
+Ctrl+C or a right click copies them.
 
 - **An open file is shown scaled down** if it is large, so that the controls stay quick; *Convert
   file* works on it at full size, with the method described under
