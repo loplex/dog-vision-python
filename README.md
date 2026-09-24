@@ -82,6 +82,9 @@ The controls are grouped into sections, and a click on a section's title opens o
 *Acuity* and *View* start closed, unless the command line turned on something in them
 (`--acuity`, `--compare`, `--difference`).
 
+![The window: a test chart as it is and as a dog sees it, side by side, with the species list, the
+facts about the dog and the simulation's controls on the right](docs/window.png)
+
 | Control                         | Does                                                |
 |---------------------------------|-----------------------------------------------------|
 | *Species* list                  | a click or the arrow keys pick the animal           |
