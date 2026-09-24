@@ -89,8 +89,8 @@ list keeps four rows.
 *View › Side panel* or F9 hides the controls, and the images take their room.
 What works on the window as a whole — the source, saving, the language — is in the menu bar, and a
 status bar at the bottom says what is shown, how a conversion stands and what the last action did.
-The species, the *View* section's controls and the acuity blur are in the menu bar too, under
-*Species* and *View*, so they stay at hand with the side panel hidden.
+The species, the *View* section's controls, the colour saturation and the acuity blur are in the
+menu bar too, under *Species* and *View*, so they stay at hand with the side panel hidden.
 The controls are grouped into sections, and a click on a section's title opens or closes it.
 *Acuity* and *View* start closed, unless the command line turned on something in them
 (`--acuity`, `--compare`, `--difference`).

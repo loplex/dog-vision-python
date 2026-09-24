@@ -706,6 +706,10 @@ def run(session: LiveSession) -> None:
         accelerator="d",
     )
     view_menu.add_separator()
+    chroma_menu = tk.Menu(view_menu, tearoff=False)
+    entry(view_menu, "cascade", "Colour saturation", menu=chroma_menu)
+    for value in session.chroma_scales:
+        entry(chroma_menu, "radiobutton", chroma_labels[value], value=value, variable=chroma_scale, command=on_chroma_scale)
     entry(
         view_menu,
         "checkbutton",
