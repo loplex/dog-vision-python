@@ -163,7 +163,8 @@ Everything else sits in `LiveSession` in [`session.py`](src/dog_vision/core/sess
 - `species_names` and `chroma_scales` list the choices in display order; `species_labels` adds
   each species' kind of colour vision to its name.
 - `species_facts()` returns what is known about the current species as (label, value, description)
-  rows.
+  rows; a value is a tuple of the pieces of information it holds, such as a share and its source,
+  so that a window breaks its lines only between them.
 - `language` is a code from `languages`, which maps each to the language's own name, and sets
   the language of `species_labels`, `species_facts()` and `captions()`; `translate()` gives the
   window's own texts in it.

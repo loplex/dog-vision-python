@@ -74,7 +74,7 @@ def print_info(params: Params) -> None:
             print("  rnl keeps blue    angle of K d to d =", abs(np.arctan2(*mapped[::-1]) - np.arctan2(*blue_yellow[::-1])))
     print()
     for label, value, _description in species_facts(params.species):
-        print(f"  {label + ':':15s} {value}")
+        print(f"  {label + ':':15s} {' '.join(value)}")
     print("\nReference values: the dog's neutral point was measured at about 480 nm")
     print("(Neitz, Geist & Jacobs 1989); a human deuteranope is R' = G' = 0.293 R + 0.707 G")
     print("(Viénot, Brettel & Mollon 1999).")

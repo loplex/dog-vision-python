@@ -26,9 +26,8 @@ TOOLTIP_WIDTH = 380  # pixels a tooltip's text wraps at
 FILE_EXTENSIONS = ["jpg", "jpeg", "png", "bmp", "tif", "tiff", "webp", "mp4", "mov", "m4v", "avi", "mkv", "webm"]
 MIN_LIST_ROWS = 4  # rows of the species list the panel keeps before it scrolls instead
 WHEEL_LINES = 3  # lines of text the panel scrolls by per notch of the mouse wheel
-FACT_WIDTH = 190  # pixels a species fact wraps at
-FACT_GAP = 8  # pixels between a species fact's name and its value
 CAPTION_GAP = 12  # pixels kept free between the captions of two images
+FACT_GAP = 8  # pixels between a species fact's name and its value
 PERCENT_SLIDERS = {"adaptation": "Adaptation to scene [%]", "strength": "Simulation strength [%]"}
 
 # What a control does, shown while the pointer rests on it; keyed by the control's own text.
@@ -383,6 +382,30 @@ def run(session: LiveSession) -> None:
     facts_section.frame.grid(row=2, column=0, sticky="ew")
     facts_frame = facts_section.body
     facts_frame.columnconfigure(1, weight=1)
+    fact_font = font.nametofont("TkDefaultFont")
+    fact_widths: dict[str, int] = {}  # by language
+
+    def fact_width() -> int:
+        """The widest piece of any species' facts: lines that wide never have to break a piece."""
+        if session.language not in fact_widths:
+            fact_widths[session.language] = max(
+                fact_font.measure(piece)
+                for name in session.species_names
+                for _label, value, _description in session.species_facts(name)
+                for piece in value
+            )
+        return fact_widths[session.language]
+
+    def fact_text(value: tuple[str, ...]) -> str:
+        """A fact's pieces of information, as many to a line as fit in fact_width()."""
+        lines = [value[0]]
+        for piece in value[1:]:
+            joined = f"{lines[-1]} {piece}"
+            if fact_font.measure(joined) <= fact_width():
+                lines[-1] = joined
+            else:
+                lines.append(piece)
+        return "\n".join(lines)
 
     def show_facts() -> None:
         for child in facts_frame.winfo_children():
@@ -391,7 +414,7 @@ def run(session: LiveSession) -> None:
             name = ttk.Label(facts_frame, text=label, foreground="#555555")
             name.grid(row=row, column=0, sticky="nw", padx=(0, FACT_GAP))
             Tooltip(name, lambda description=description: description)
-            ttk.Label(facts_frame, text=value, wraplength=FACT_WIDTH).grid(row=row, column=1, sticky="w")
+            ttk.Label(facts_frame, text=fact_text(value)).grid(row=row, column=1, sticky="w")
         fit_panel()  # species have more or fewer facts
 
     simulation = Section(side, section_font, is_open=True, on_toggle=fit_panel)
@@ -518,8 +541,8 @@ def run(session: LiveSession) -> None:
         """
         # Each column of the facts as wide as any species needs it, from labels measured but never shown.
         rows = [row for name in session.species_names for row in session.species_facts(name)]
-        for column, texts in enumerate(({label for label, _v, _d in rows}, {value for _l, value, _d in rows})):
-            probes = [ttk.Label(facts_frame, text=text, wraplength=FACT_WIDTH) for text in texts]
+        for column, texts in enumerate(({label for label, _v, _d in rows}, {fact_text(value) for _l, value, _d in rows})):
+            probes = [ttk.Label(facts_frame, text=text) for text in texts]
             # A column's minsize includes the padding of what it holds; the names are padded.
             gap = FACT_GAP if column == 0 else 0
             facts_frame.columnconfigure(column, minsize=max(probe.winfo_reqwidth() for probe in probes) + gap)

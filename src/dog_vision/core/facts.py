@@ -1,5 +1,7 @@
 """What the window says about a species: its label and its facts, in any language of i18n."""
 
+import re
+
 from dog_vision.core import i18n
 from dog_vision.core.model import Params, neutral_point, rnl_gains
 from dog_vision.core.species import (
@@ -91,8 +93,26 @@ FACT_DESCRIPTIONS = {
 }
 
 
-def species_facts(species: str, language: str = "en") -> list[tuple[str, str, str]]:
-    """What the simulation knows about a species, as (label, value, description) rows for a table."""
+def pieces(text: str) -> list[str]:
+    """text split after each ", " that follows a number, the comma kept with what it ends.
+
+    In a citation the commas before the year separate authors, and the ones after it a note or
+    another citation, as in "Jacobs, Birch & Blakeslee 1982, 1.8 to 3.8".
+    """
+    parts, start = [], 0
+    for comma in re.finditer(", ", text):
+        if re.search(r"\d", text[start : comma.start()]):
+            parts.append(text[start : comma.start() + 1])
+            start = comma.end()
+    return [*parts, text[start:]]
+
+
+def species_facts(species: str, language: str = "en") -> list[tuple[str, tuple[str, ...], str]]:
+    """What the simulation knows about a species, as (label, value, description) rows for a table.
+
+    A value is the pieces of information it holds, such as a share and its source: joined by
+    spaces they read as one line, and a table that has to break it breaks it only between them.
+    """
     def _(text: str) -> str:
         return i18n.translate(text, language)
 
@@ -100,36 +120,38 @@ def species_facts(species: str, language: str = "en") -> list[tuple[str, str, st
     n = len(peaks)
     names = {3: "SML", 2: "SL", 1: "L"}[n]
     cone_types = _("{kind}, {n} cone types" if n > 1 else "{kind}, 1 cone type")
+    cones = [f"{name} {i18n.number(peak, 'g', language)} nm" for name, peak in zip(names, peaks)]
     facts = [
-        ("Colour vision", cone_types.format(kind=_(COLOUR_VISION[n]), n=n)),
-        ("Cone peaks", ", ".join(f"{name} {i18n.number(peak, 'g', language)} nm" for name, peak in zip(names, peaks))),
-        ("Peaks from", _(PEAKS_FROM[species])),
+        ("Colour vision", [cone_types.format(kind=_(COLOUR_VISION[n]), n=n)]),
+        ("Cone peaks", [f"{cone}," for cone in cones[:-1]] + cones[-1:]),
+        ("Peaks from", pieces(_(PEAKS_FROM[species]))),
     ]
     if n == 1:
-        facts += [("RNL scale", _("nothing to scale"))]
+        facts += [("RNL scale", [_("nothing to scale")])]
     else:
         low, high, source = S_CONE_FRACTION.get(species, (*ASSUMED_S_CONE_FRACTION, _("assumed")))
-        facts.append(("S cones", _("{share} of cones ({source})").format(share=percent(low, high, language), source=source)))
+        facts.append(("S cones", [_("{share} of cones").format(share=percent(low, high, language)), *pieces(f"({source})")]))
         if n == 3:
-            facts.append(("L : M cones", _("{ratio} : 1 (assumed)").format(ratio=i18n.number(ASSUMED_L_TO_M, "g", language))))
+            facts.append(("L : M cones", [f"{i18n.number(ASSUMED_L_TO_M, 'g', language)} : 1", f"({_('assumed')})"]))
         else:
-            facts.append(("Neutral point", f"{neutral_point(Params(species)):.0f} nm (model)"))
+            facts.append(("Neutral point", [f"{neutral_point(Params(species)):.0f} nm", "(model)"]))
         gains = _(" and ").join(f"x{i18n.number(gain, '.2f', language)}" for gain in rnl_gains(Params(species)))
-        facts.append(("RNL scale", _("{gains} of fixed").format(gains=gains)))
+        facts.append(("RNL scale", [_("{gains} of fixed").format(gains=gains)]))
     facts.append(("Acuity", acuity_value(species, language)))
-    return [(_(label), value, _(FACT_DESCRIPTIONS[label])) for label, value in facts]
+    return [(_(label), tuple(value), _(FACT_DESCRIPTIONS[label])) for label, value in facts]
 
 
-def acuity_value(species: str, language: str = "en") -> str:
+def acuity_value(species: str, language: str = "en") -> list[str]:
+    """The species' acuity and its source, as species_facts gives a value."""
     def _(text: str) -> str:
         return i18n.translate(text, language)
 
     if species not in ACUITY:
-        return _("not found measured; left sharp")
+        return [_("not found measured;"), _("left sharp")]
     (across, up), source = ACUITY[species]
     across, up = (i18n.number(value, ".3g", language) for value in (across, up))
     if across == up:
-        value = _("{value} c/deg").format(value=across)
+        value = [_("{value} c/deg").format(value=across)]
     else:
-        value = _("{across} c/deg side by side, {up} one above another").format(across=across, up=up)
-    return f"{value} ({_(source)})"
+        value = [_("{across} c/deg side by side,").format(across=across), _("{up} one above another").format(up=up)]
+    return [*value, *pieces(f"({_(source)})")]
