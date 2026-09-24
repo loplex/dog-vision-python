@@ -1,7 +1,3 @@
-# /// script
-# requires-python = ">=3.10"
-# dependencies = ["numpy", "opencv-python-headless"]
-# ///
 """Check README.md against the code it describes.
 
 - The species table lists exactly SPECIES, in order, with the same peaks, S-cone shares and sources.
@@ -21,11 +17,10 @@ import re
 import sys
 from pathlib import Path
 
-import dog_vision as dv
-import i18n
 import render_photo_figures
 import render_species_grid
-import tk_window
+from dog_vision import cli as dv
+from dog_vision import i18n, tk_window
 
 ROOT = Path(__file__).parent
 
@@ -129,7 +124,8 @@ def string_constants(path: Path) -> set[str]:
 
 def check_translations() -> list[str]:
     errors = []
-    code = string_constants(ROOT / "dog_vision.py") | string_constants(ROOT / "tk_window.py")
+    package = ROOT / "src" / "dog_vision"
+    code = string_constants(package / "cli.py") | string_constants(package / "tk_window.py")
     for name, language in i18n.LANGUAGES.items():
         if language.species and list(language.species) != list(dv.SPECIES):
             errors.append(f"i18n language {name} names {list(language.species)}, SPECIES has {list(dv.SPECIES)}")

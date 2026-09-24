@@ -17,7 +17,7 @@ import cv2
 import numpy as np
 
 if TYPE_CHECKING:
-    from dog_vision import LiveSession
+    from dog_vision.cli import LiveSession
 
 FRAME_INTERVAL_MS = 15
 TOOLTIP_DELAY_MS = 500
@@ -113,7 +113,7 @@ def warn_without_xft(root: tk.Tk) -> None:
     if root.tk.call("tk", "windowingsystem") == "x11" and font_system != "xft":
         print(
             "This Python's Tk has no Xft, so text is drawn without antialiasing;"
-            " run it with a Python whose Tk has Xft, e.g. uv run --python /usr/bin/python3 dog_vision.py",
+            " run it with a Python whose Tk has Xft, e.g. uv run --python /usr/bin/python3 dog-vision",
             file=sys.stderr,
         )
 

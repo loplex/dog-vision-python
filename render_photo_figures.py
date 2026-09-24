@@ -1,10 +1,3 @@
-# /// script
-# requires-python = ">=3.10"
-# dependencies = ["numpy", "opencv-python-headless"]
-#
-# [tool.uv]
-# python-preference = "system"
-# ///
 """Render the README's figures made from docs/shiny-red-apples.jpg.
 
 - docs/apples-species.png: the photo as it is and as five species see it.
@@ -25,7 +18,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-import dog_vision as dv
+from dog_vision import cli as dv
 
 DOCS = Path(__file__).parent / "docs"
 PHOTO = DOCS / "shiny-red-apples.jpg"

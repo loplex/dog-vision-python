@@ -1,0 +1,18 @@
+[project]
+name = "dog-vision"
+version = "0.1.0"
+description = "Simulate how dogs and other mammals see colour, on a live camera, a photo or a video"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["numpy", "opencv-python-headless"]
+
+[project.scripts]
+dog-vision = "dog_vision.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.17,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv]
+# uv's own Python builds ship a Tk without Xft, which draws text unantialiased.
+python-preference = "system"

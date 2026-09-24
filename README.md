@@ -21,23 +21,23 @@ the seal](docs/apples-species.png)
 
 ## Running it
 
-The script declares its dependencies inline ([PEP 723](https://peps.python.org/pep-0723/)), so
-[uv](https://docs.astral.sh/uv/) is the only thing to install.
+The dependencies are declared in [`pyproject.toml`](pyproject.toml), and
+[uv](https://docs.astral.sh/uv/) is the only thing to install: `uv run` sets up the rest on first use.
 The window uses Tkinter.
-The script asks uv for a Python already on the system, because the Tk in uv's own Python builds
+The project asks uv for a Python already on the system, because the Tk in uv's own Python builds
 lacks Xft and draws text without antialiasing; the window warns when that is the Tk it got.
 A distribution's Python may need its Tk package (`python3-tk` on Debian and Ubuntu).
 
 ```sh
-uv run dog_vision.py                     # live camera 0, as a dog
-uv run dog_vision.py --camera 1          # another camera
-uv run dog_vision.py --species horse     # another animal
-uv run dog_vision.py --species cow --compare horse   # two animals side by side
-uv run dog_vision.py --species cow --compare horse --difference   # and where they differ
-uv run dog_vision.py photo.jpg           # writes photo.dog.png next to it
-uv run dog_vision.py clip.mp4            # writes clip.dog.mp4 next to it
-uv run dog_vision.py --window clip.mp4   # shows it in the window instead
-uv run dog_vision.py --adaptation 1 sunset.jpg
+uv run dog-vision                     # live camera 0, as a dog
+uv run dog-vision --camera 1          # another camera
+uv run dog-vision --species horse     # another animal
+uv run dog-vision --species cow --compare horse   # two animals side by side
+uv run dog-vision --species cow --compare horse --difference   # and where they differ
+uv run dog-vision photo.jpg           # writes photo.dog.png next to it
+uv run dog-vision clip.mp4            # writes clip.dog.mp4 next to it
+uv run dog-vision --window clip.mp4   # shows it in the window instead
+uv run dog-vision --adaptation 1 sunset.jpg
 ```
 
 - `--compare` puts a second species where the original would be, with the same settings, so two
@@ -55,7 +55,7 @@ uv run dog_vision.py --adaptation 1 sunset.jpg
   [Video is written with the best method the system has](#video-is-written-with-the-best-method-the-system-has).
 - `--window` shows the photo or video in the window instead of converting it, and the window can
   convert it from there.
-- `uv run dog_vision.py --help` lists every option.
+- `uv run dog-vision --help` lists every option.
 
 ### Video is written with the best method the system has
 
@@ -127,7 +127,7 @@ Resting the pointer on a label, a box or a button shows what it means, in a few 
 ### The window starts in the system's language, looked up as gettext does
 
 The window speaks English and Czech.
-A language is one entry in `LANGUAGES` in [`i18n.py`](i18n.py): its name, its decimal point, and
+A language is one entry in `LANGUAGES` in [`i18n.py`](src/dog_vision/i18n.py): its name, its decimal point, and
 its translations, each keyed by the English text as in gettext.
 
 The first of these that is set decides, and a language the window does not speak gives English:
@@ -138,14 +138,14 @@ The first of these that is set decides, and a language the window does not speak
 4. `LANG`
 5. on Windows, the user's interface language; elsewhere, the locale Python started in
 
-So `LANGUAGE=en uv run dog_vision.py` opens it in English whatever the system says.
+So `LANGUAGE=en uv run dog-vision` opens it in English whatever the system says.
 Only the window is translated: `--help`, `--info` and what a photo conversion prints stay English.
 
 ## Another GUI toolkit
 
-The window lives in [`tk_window.py`](tk_window.py) and does nothing but lay out widgets and forward
+The window lives in [`tk_window.py`](src/dog_vision/tk_window.py) and does nothing but lay out widgets and forward
 events.
-Everything else sits in `LiveSession` in [`dog_vision.py`](dog_vision.py):
+Everything else sits in `LiveSession` in [`cli.py`](src/dog_vision/cli.py):
 
 - `render()` returns the current view as an RGB array, or `None` before the first frame.
   The camera or a video is read on a thread of its own, so a GUI can call it from any timer.
@@ -167,7 +167,7 @@ Everything else sits in `LiveSession` in [`dog_vision.py`](dog_vision.py):
 - `reset()`, `save_snapshot()` and `error` cover the buttons and a camera that stops.
 
 A window in another toolkit is a module with the same `run(session)` function; `main()` in
-`dog_vision.py` imports the window in one line.
+`cli.py` imports the window in one line.
 
 ## Species
 
@@ -257,7 +257,7 @@ The method is the one Brettel, Viénot & Mollon (1997) use for human dichromats:
 6. The saturation of the result is set by one of two [scales](#colour-saturation).
 
 The whole transform is one 3×3 matrix on linear RGB.
-The docstring of [`dog_vision.py`](dog_vision.py) states it as formulas.
+The docstring of [`cli.py`](src/dog_vision/cli.py) states it as formulas.
 
 ## Colour saturation
 
@@ -400,7 +400,7 @@ That catches differences in colour and in sharpness alike.
 
 ## Checking it
 
-- `uv run dog_vision.py --info --species <name>` prints the derived matrices and checks that grey
+- `uv run dog-vision --info --species <name>` prints the derived matrices and checks that grey
   is preserved, that the output excites the cones exactly as the input does, and the neutral point.
 - `uv run check_docs.py` checks this README against the code: the species table with its S-cone
   shares and sources, the relative links and anchors, the neutral points quoted above, and that the
@@ -408,7 +408,7 @@ That catches differences in colour and in sharpness alike.
   ([`render_species_grid.py`](render_species_grid.py), [`render_photo_figures.py`](render_photo_figures.py)).
 - The apple photo is [*Shiny red apples*](https://commons.wikimedia.org/wiki/File:Shiny_red_apples.jpg)
   by Leon Brooks, released into the public domain.
-  It also checks that each translation in [`i18n.py`](i18n.py) names every species and describes
+  It also checks that each translation in [`i18n.py`](src/dog_vision/i18n.py) names every species and describes
   every label, and that every English text it translates still occurs in the code.
 
 ## References

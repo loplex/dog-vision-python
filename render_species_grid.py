@@ -1,10 +1,3 @@
-# /// script
-# requires-python = ">=3.10"
-# dependencies = ["numpy", "opencv-python-headless"]
-#
-# [tool.uv]
-# python-preference = "system"
-# ///
 """Render docs/species-grid.png: a hue sweep and eight colour patches, as every species sees them.
 
     uv run render_species_grid.py            # write the image
@@ -18,7 +11,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-import dog_vision as dv
+from dog_vision import cli as dv
 
 OUTPUT = Path(__file__).parent / "docs" / "species-grid.png"
 STRIP_WIDTH = 400

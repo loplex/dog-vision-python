@@ -1,11 +1,3 @@
-# /// script
-# requires-python = ">=3.10"
-# dependencies = ["numpy", "opencv-python-headless"]
-#
-# [tool.uv]
-# # uv's own Python builds ship a Tk without Xft, which draws text unantialiased.
-# python-preference = "system"
-# ///
 """Simulate dichromatic dog colour vision on a live camera feed or a photo.
 
 Other dichromats, some trichromats and two cone monochromats are available as
@@ -39,16 +31,16 @@ adaptation its rank equals the number of cone types, and the animal's cone
 excitation of every output pixel equals that of the input.
 
 Usage:
-    uv run dog_vision.py                 # live camera 0
-    uv run dog_vision.py --camera 1      # another camera
-    uv run dog_vision.py photo.jpg       # convert a photo, writes photo.dog.png
-    uv run dog_vision.py clip.mp4        # convert a video, writes clip.dog.mp4
-    uv run dog_vision.py --window clip.mp4             # show a file in the window instead
-    uv run dog_vision.py --info          # print the derived model and checks
-    uv run dog_vision.py --species cat   # another dichromat
-    uv run dog_vision.py --species cat --compare dog   # two species side by side
+    uv run dog-vision                 # live camera 0
+    uv run dog-vision --camera 1      # another camera
+    uv run dog-vision photo.jpg       # convert a photo, writes photo.dog.png
+    uv run dog-vision clip.mp4        # convert a video, writes clip.dog.mp4
+    uv run dog-vision --window clip.mp4             # show a file in the window instead
+    uv run dog-vision --info          # print the derived model and checks
+    uv run dog-vision --species cat   # another dichromat
+    uv run dog-vision --species cat --compare dog   # two species side by side
 
-The live window (tk_window.py) lists the species on the right; keys: m = toggle
+The live window (dog_vision.tk_window) lists the species on the right; keys: m = toggle
 side-by-side / simulation only, d = map of differences, o = open a photo or a video,
 r = reset to the command-line values, s = save snapshot, F9 = hide or show the
 controls, q or Esc = quit. The window only drives LiveSession, so another GUI
@@ -65,8 +57,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-import i18n
-import video_file
+from dog_vision import i18n, video_file
 
 # Photopigment peak wavelengths in nm.
 HUMAN_CONES = {"S": 420.7, "M": 530.3, "L": 558.9}  # Stockman & Sharpe (2000)
@@ -945,7 +936,9 @@ class LiveSession:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        prog="dog-vision", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("image", nargs="?", type=Path, help="photo or video to convert instead of using the camera")
     parser.add_argument("--window", action="store_true", help="show the photo or video in the window instead of converting it")
     parser.add_argument("--camera", type=int, default=0, help="camera index (default 0)")
@@ -986,7 +979,7 @@ def main() -> None:
     elif args.image and not args.window:
         convert_file(args.image, params, args.compare, args.difference)
     else:
-        import tk_window  # the only GUI-specific line in this module
+        from dog_vision import tk_window  # the only GUI-specific line in this module
 
         session = LiveSession(args.camera, params, args.compare, args.image)
         session.difference = args.difference
