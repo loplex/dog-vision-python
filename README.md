@@ -72,7 +72,7 @@ The images follow the window's size; the controls keep theirs.
 
 ### The window starts in the system's language, looked up as gettext does
 
-The window speaks English.
+The window speaks English and Czech.
 A language is one entry in `LANGUAGES` in [`i18n.py`](i18n.py): its name, its decimal point, and
 its translations, each keyed by the English text as in gettext.
 
