@@ -429,14 +429,35 @@ def run(session: LiveSession) -> None:
         return fact_widths[session.language]
 
     def fact_text(value: tuple[str, ...]) -> str:
-        """A fact's pieces of information, as many to a line as fit in fact_width()."""
-        lines = [value[0]]
-        for piece in value[1:]:
-            joined = f"{lines[-1]} {piece}"
-            if fact_font.measure(joined) <= fact_width():
-                lines[-1] = joined
+        """A fact's pieces of information, as many to a line as fit in fact_width().
+
+        The pieces of a source in brackets are kept together: a source that does not fit after
+        the value starts a line of its own, and breaks between its pieces only where it is wider
+        than a line.
+        """
+        groups: list[list[str]] = []
+        inside = False
+        for piece in value:
+            if inside:
+                groups[-1].append(piece)
             else:
-                lines.append(piece)
+                groups.append([piece])
+            inside = (inside or piece.startswith("(")) and not piece.endswith(")")
+        lines: list[str] = []
+        for group in groups:
+            whole = " ".join(group)
+            if lines and fact_font.measure(f"{lines[-1]} {whole}") <= fact_width():
+                lines[-1] = f"{lines[-1]} {whole}"
+            elif fact_font.measure(whole) <= fact_width():
+                lines.append(whole)
+            else:
+                lines.append(group[0])
+                for piece in group[1:]:
+                    joined = f"{lines[-1]} {piece}"
+                    if fact_font.measure(joined) <= fact_width():
+                        lines[-1] = joined
+                    else:
+                        lines.append(piece)
         return "\n".join(lines)
 
     def show_facts() -> None:
