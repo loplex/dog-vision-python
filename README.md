@@ -19,6 +19,7 @@ the seal](docs/apples-species.png)
 - [Checking it](#checking-it) — `--info`, `check_docs.py`, `lint-imports` and `pytest`.
 - [References](#references)
 - [Credits](#credits)
+- [License](#license)
 
 ## Running it
 
@@ -558,3 +559,8 @@ That catches differences in colour and in sharpness alike.
 
 The apple photo is [*Shiny red apples*](https://commons.wikimedia.org/wiki/File:Shiny_red_apples.jpg)
 by Leon Brooks, released into the public domain.
+
+## License
+
+dog-vision is free software under the GNU General Public License, version 3 or any later version
+(`GPL-3.0-or-later`); the full text is in [`LICENSE`](LICENSE).
