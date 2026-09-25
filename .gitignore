@@ -1,7 +1,9 @@
 __pycache__/
-# Output of the tool itself: snapshots and converted photos
+# Output of the tool itself: snapshots, recordings and converted files
 dog-*.png
+dog-*.mp4
 *.dog.png
+*.dog.mp4
 # Local Claude Code state, e.g. plugin settings and locks
 .claude/
 # JetBrains IDE project settings
