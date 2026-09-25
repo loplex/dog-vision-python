@@ -435,10 +435,12 @@ That catches differences in colour and in sharpness alike.
   every English text it translates still occurs in the code.
 - `uv run lint-imports` checks that the code keeps its layers: `dog_vision.core` imports neither the
   window nor the command line, and `dog_vision.gui` does not import the command line.
-- `uv run pytest` runs the tests in [`tests/`](tests). They cover recording: that each frame is
-  repeated for as long as it was shown, that a frame of another size or one the encoder cannot
-  keep up with is dropped, that a failed recording says why and removes its unfinished file, and that
-  `LiveSession` records the view as rendered.
+- `uv run pytest` runs the tests in [`tests/`](tests): the model's invariants (grey stays grey, with
+  the fixed saturation the animal's cones see the output as they see the input, and the RNL one lets a
+  human count the animal's differences), the image pipeline, the facts and their translations, converting and recording video,
+  the command line, `LiveSession`, and the window, driven through its keys and menus. The window's
+  tests run on a virtual display when Xvfb is installed and on `$DISPLAY` otherwise, and are skipped
+  without either; the tests of sound, colours and padding in a video need ffmpeg.
 - The apple photo is [*Shiny red apples*](https://commons.wikimedia.org/wiki/File:Shiny_red_apples.jpg)
   by Leon Brooks, released into the public domain.
 
