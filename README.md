@@ -441,6 +441,7 @@ That catches differences in colour and in sharpness alike.
   the command line, `LiveSession`, and the window, driven through its keys and menus. The window's
   tests run on a virtual display when Xvfb is installed and on `$DISPLAY` otherwise, and are skipped
   without either; the tests of sound, colours and padding in a video need ffmpeg.
+  `uv run pytest --cov` also lists the lines and branches of `dog_vision` that no test reaches.
 - The apple photo is [*Shiny red apples*](https://commons.wikimedia.org/wiki/File:Shiny_red_apples.jpg)
   by Leon Brooks, released into the public domain.
 

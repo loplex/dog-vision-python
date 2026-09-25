@@ -6,3 +6,5 @@ dog-*.png
 .claude/
 # JetBrains IDE project settings
 .idea/
+# Coverage data of uv run pytest --cov
+.coverage

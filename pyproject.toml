@@ -21,6 +21,7 @@ python-preference = "system"
 dev = [
     "import-linter>=2.15",
     "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
 ]
 
 [tool.importlinter]
@@ -30,3 +31,11 @@ root_package = "dog_vision"
 name = "The command line uses the window, the window the core, never the other way"
 type = "layers"
 layers = ["dog_vision.cli", "dog_vision.gui", "dog_vision.core"]
+
+[tool.coverage.run]
+branch = true
+source = ["dog_vision"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
