@@ -1,3 +1,6 @@
+import io
+import os
+import subprocess
 import sys
 
 import cv2
@@ -155,3 +158,48 @@ def test_a_converted_photo_that_cannot_be_written_is_an_error(monkeypatch, photo
     photo.with_suffix(".dog.png").mkdir()  # a folder where the file would go
     with pytest.raises(SystemExit, match="Cannot write .*photo.dog.png"):
         run(monkeypatch, photo)
+
+
+def test_info_for_a_monochromat_has_no_rnl_checks(monkeypatch, capsys):
+    run(monkeypatch, "--info", "--species", "harbour-seal")
+    out = capsys.readouterr().out
+    assert "grey preserved" in out
+    assert "rnl matches" not in out and "  neutral point  " not in out
+
+
+class Terminal(io.StringIO):
+    def isatty(self) -> bool:
+        return True
+
+
+def test_a_conversion_in_a_terminal_shows_its_progress(monkeypatch, tmp_path):
+    source = write_video(tmp_path / "clip.mp4", [50, 100])
+    terminal = Terminal()
+    monkeypatch.setattr(sys, "stderr", terminal)
+    run(monkeypatch, source)
+    assert terminal.getvalue() == "\rConverting: 50%\rConverting: 100%\n"
+
+
+def test_a_conversion_outside_a_terminal_is_quiet(monkeypatch, capsys, tmp_path):
+    run(monkeypatch, write_video(tmp_path / "clip.mp4", [50, 100]))
+    assert capsys.readouterr().err == ""
+
+
+def test_a_failed_video_conversion_ends_with_its_error(monkeypatch, tmp_path):
+    def fail(*args, **options):
+        raise RuntimeError("ffmpeg (libx265) failed: no space left")
+
+    monkeypatch.setattr(cli, "convert_video", fail)
+    with pytest.raises(SystemExit, match="ffmpeg \\(libx265\\) failed: no space left"):
+        run(monkeypatch, write_video(tmp_path / "clip.mp4", [50]))
+
+
+def test_python_m_dog_vision_runs_the_command_line(tmp_path):
+    environment = {**os.environ, "XDG_CONFIG_HOME": str(tmp_path), "LANGUAGE": "en"}
+    for module in ("dog_vision", "dog_vision.cli"):
+        result = subprocess.run(
+            [sys.executable, "-m", module, "--info", "--species", "cat"],
+            capture_output=True, text=True, env=environment, check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "Species cat, cone peaks (450.0, 550.0) nm" in result.stdout

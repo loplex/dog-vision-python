@@ -35,6 +35,7 @@ layers = ["dog_vision.cli", "dog_vision.gui", "dog_vision.core"]
 [tool.coverage.run]
 branch = true
 source = ["dog_vision"]
+patch = ["subprocess"]  # measure python -m dog_vision run by a test too
 
 [tool.coverage.report]
 show_missing = true

@@ -341,3 +341,96 @@ def test_a_converted_photo_that_cannot_be_written_is_a_failure(session, tmp_path
     session.convert_source()
     wait_for(lambda: not session.converting)
     assert session.conversion_status().startswith("Conversion failed: ")
+
+
+class FakeCamera:
+    """A cv2.VideoCapture that delivers the given frames and then stops, as an unplugged camera does."""
+
+    def __init__(self, frames: list[np.ndarray]) -> None:
+        self.frames = list(frames)
+        self.released = False
+
+    def isOpened(self) -> bool:
+        return True
+
+    def read(self):
+        if self.frames:
+            return True, self.frames.pop(0)
+        time.sleep(0.01)
+        return False, None
+
+    def get(self, _property) -> float:
+        return 0.0
+
+    def release(self) -> None:
+        self.released = True
+
+
+@pytest.fixture
+def camera(monkeypatch):
+    """Make camera index 0 a FakeCamera; the test fills its frames."""
+    cameras = []
+    opener = cv2.VideoCapture
+
+    def open_capture(source, *args):
+        if source == 0:
+            cameras.append(FakeCamera(camera_frames))
+            return cameras[-1]
+        return opener(source, *args)
+
+    camera_frames: list[np.ndarray] = []
+    monkeypatch.setattr(session_module.cv2, "VideoCapture", open_capture)
+    return camera_frames
+
+
+def test_the_camera_is_shown_at_its_own_size(camera):
+    camera.extend([np.full((1500, 3000, 3), 90, np.uint8)] * 50)
+    live = LiveSession(0, Params())
+    live.side_by_side = False
+    wait_for(lambda: live.render() is not None)
+    assert live.render().shape == (1500, 3000, 3)  # not scaled down like a file
+    assert live.source is None and live.source_name() == "Camera 0"
+    live.close()
+
+
+def test_a_camera_that_stops_says_so(camera):
+    camera.extend([np.full((8, 8, 3), 90, np.uint8)] * 3)
+    live = LiveSession(0, Params())
+    wait_for(lambda: live.error is not None)
+    assert live.error == "Camera stopped delivering frames"
+    live.close()
+
+
+def test_the_camera_can_be_shown_again_after_a_file(session, camera):
+    camera.extend([np.full((8, 8, 3), 90, np.uint8)] * 1000)
+    assert session.open_camera()
+    assert session.source is None and not session.source_is_video
+    wait_for(lambda: session.render() is not None and session.render().shape == (8, 16, 3))
+
+
+def test_a_video_starts_over_at_its_end(session, tmp_path):
+    clip = write_video(tmp_path / "clip.mp4", [60, 180], fps=50)
+    session.open_file(clip)
+    session.side_by_side = False
+    seen = []
+    deadline = time.monotonic() + 3
+    while time.monotonic() < deadline and seen[-3:] != [60, 180, 60]:
+        image = session.render()
+        if image is not None and (not seen or seen[-1] != round(image.mean(), -1)):
+            seen.append(round(image.mean(), -1))
+        time.sleep(0.005)
+    assert seen[-3:] == [60, 180, 60], seen
+
+
+def test_a_converted_photo_that_cannot_be_written_next_to_it_is_a_failure(session, tmp_path):
+    (tmp_path / "photo.dog.png").mkdir()  # a folder where the file would go
+    session.convert_source()
+    wait_for(lambda: not session.converting)
+    assert session.conversion_status().startswith("Conversion failed: Cannot write ")
+
+
+def test_a_file_given_at_the_start_that_cannot_be_read_is_refused(tmp_path):
+    notes = tmp_path / "notes.txt"
+    notes.write_text("no picture")
+    with pytest.raises(SystemExit, match="Cannot read image or video: .*notes.txt"):
+        LiveSession(0, Params(), path=notes)

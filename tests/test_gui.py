@@ -10,6 +10,8 @@ import shutil
 import subprocess
 import time
 import tkinter as tk
+from tkinter import ttk
+from types import SimpleNamespace
 
 import cv2
 import numpy as np
@@ -318,3 +320,214 @@ def test_a_snapshot_that_cannot_be_saved_says_why(session, monkeypatch, tmp_path
         assert status_text(root).startswith("Cannot save snapshot: Cannot write ")
 
     show(session, monkeypatch, scenario)
+
+
+def descendants(widget: tk.Misc):
+    for child in widget.winfo_children():
+        yield child
+        yield from descendants(child)
+
+
+def find(root: tk.Tk, kind: type, text: str | None = None) -> tk.Misc:
+    """The first widget of a kind, with the text given if any."""
+    return next(w for w in descendants(root) if isinstance(w, kind) and (text is None or w.cget("text") == text))
+
+
+def tooltip_windows(root: tk.Tk) -> list[tk.Toplevel]:
+    return [widget for widget in descendants(root) if isinstance(widget, tk.Toplevel)]
+
+
+def tooltips(root: tk.Tk) -> list[str]:
+    return [find(window, tk.Label).cget("text") for window in tooltip_windows(root)]
+
+
+def test_a_tooltip_shows_what_a_control_means(session, monkeypatch):
+    def scenario(root):
+        button = find(root, ttk.Button, "Reset (r)")
+        button.event_generate("<Enter>")
+        pump(root, (tk_gui.TOOLTIP_DELAY_MS + 200) / 1000)
+        assert tooltips(root) == [tk_gui.DESCRIPTIONS["Reset (r)"]]
+        button.event_generate("<Leave>")
+        pump(root, 0.05)
+        assert tooltips(root) == []
+
+    show(session, monkeypatch, scenario)
+
+
+def test_a_tooltip_left_before_its_delay_never_shows(session, monkeypatch):
+    def scenario(root):
+        button = find(root, ttk.Button, "Reset (r)")
+        button.event_generate("<Enter>")
+        pump(root, 0.05)
+        button.event_generate("<Leave>")
+        pump(root, (tk_gui.TOOLTIP_DELAY_MS + 200) / 1000)
+        assert tooltips(root) == []
+
+    show(session, monkeypatch, scenario)
+
+
+def test_a_tooltip_at_the_screens_corner_opens_towards_the_middle(session, monkeypatch):
+    def scenario(root):
+        button = find(root, ttk.Button, "Reset (r)")
+        corner = (root.winfo_screenwidth() - 2, root.winfo_screenheight() - 2)
+        root.event_generate("<Motion>", warp=True, x=corner[0] - root.winfo_rootx(), y=corner[1] - root.winfo_rooty())
+        pump(root, 0.05)
+        button.event_generate("<Enter>")
+        pump(root, (tk_gui.TOOLTIP_DELAY_MS + 200) / 1000)
+        (window,) = tooltip_windows(root)
+        assert window.winfo_rootx() + window.winfo_width() <= corner[0]
+        assert window.winfo_rooty() + window.winfo_height() <= corner[1]
+
+    show(session, monkeypatch, scenario)
+
+
+def test_a_click_on_a_sections_title_closes_and_opens_it(session, monkeypatch):
+    def scenario(root):
+        title = find(root, ttk.Label, "Simulation")
+        slider_label = find(root, ttk.Label, "Simulation strength [%]")
+        assert slider_label.winfo_ismapped()
+        title.event_generate("<Button-1>")
+        pump(root, 0.1)
+        assert not slider_label.winfo_ismapped()
+        title.event_generate("<Button-1>")
+        pump(root, 0.1)
+        assert slider_label.winfo_ismapped()
+
+    show(session, monkeypatch, scenario)
+
+
+def test_a_small_window_scrolls_the_list_and_the_controls(session, monkeypatch):
+    def scenario(root):
+        root.geometry("640x320")
+        pump(root, 0.5)
+        species = find(root, tk.Listbox)
+        list_bar = next(w for w in species.master.winfo_children() if isinstance(w, ttk.Scrollbar))
+        assert list_bar.winfo_ismapped()
+        panel = next(child for child in root.winfo_children() if child.grid_info().get("column") == 1)
+        canvas = next(w for w in panel.winfo_children() if isinstance(w, tk.Canvas))
+        assert canvas.yview()[0] == 0
+        species.event_generate("<Button-5>")  # the list scrolls itself, not the panel
+        pump(root, 0.1)
+        assert canvas.yview()[0] == 0
+        find(root, ttk.Label, "Simulation").event_generate("<Button-5>")
+        pump(root, 0.1)
+        assert canvas.yview()[0] > 0
+        find(root, ttk.Label, "Simulation").event_generate("<Button-4>")
+        pump(root, 0.1)
+        assert canvas.yview()[0] == 0
+        canvas_items(root, "image")[1].event_generate("<Button-5>")  # over the images, not the panel
+        pump(root, 0.1)
+        assert canvas.yview()[0] == 0
+        for title in ("Selected species", "Simulation"):  # closed, they leave the list room
+            find(root, ttk.Label, title).event_generate("<Button-1>")
+        root.geometry("1500x950")
+        pump(root, 0.5)
+        assert not list_bar.winfo_ismapped()  # the list fits again
+
+    show(session, monkeypatch, scenario)
+
+
+def test_the_facts_can_be_selected_and_copied(session, monkeypatch):
+    posted = []
+    monkeypatch.setattr(tk.Menu, "tk_popup", lambda menu, x, y, entry="": posted.append(menu))
+
+    def scenario(root):
+        facts = find(root, tk.Text)
+        facts.event_generate("<Button-3>", x=5, y=5)
+        (menu,) = posted
+        copy = next(i for i in range(menu.index("end") + 1) if menu.entrycget(i, "label") == "Copy")
+        assert menu.entrycget(copy, "state") == "disabled"  # nothing selected yet
+        facts.focus_force()
+        facts.event_generate("<Control-a>")
+        assert facts.get("sel.first", "sel.last") == facts.get("1.0", "end-1c")
+        facts.tag_remove("sel", "1.0", "end")
+        menu.invoke(next(i for i in range(menu.index("end") + 1) if menu.entrycget(i, "label") == "Select all"))
+        facts.event_generate("<Button-3>", x=5, y=5)
+        assert menu.entrycget(copy, "state") == "normal"
+        root.clipboard_clear()
+        menu.invoke(copy)
+        assert root.clipboard_get().startswith("Colour vision\tdichromat, 2 cone types")
+
+    show(session, monkeypatch, scenario)
+
+
+def test_a_click_in_the_species_list_chooses_the_species(session, monkeypatch):
+    def scenario(root):
+        species = find(root, tk.Listbox)
+        species.selection_clear(0, "end")
+        species.selection_set(session.species_names.index("horse"))
+        species.event_generate("<<ListboxSelect>>")
+        pump(root, 0.1)
+        assert session.params.species == "horse"
+
+    show(session, monkeypatch, scenario)
+
+
+def test_o_opens_a_file(session, monkeypatch, tmp_path):
+    clip = tmp_path / "clip.mp4"
+    writer = cv2.VideoWriter(str(clip), cv2.VideoWriter_fourcc(*"mp4v"), 10, (64, 48))
+    writer.write(np.zeros((48, 64, 3), np.uint8))
+    writer.release()
+    monkeypatch.setattr(tk_gui.filedialog, "askopenfilename", lambda **options: str(clip))
+
+    def scenario(root):
+        press(root, "o")
+        assert session.source == clip and session.source_is_video
+
+    show(session, monkeypatch, scenario)
+
+
+def test_a_file_that_is_no_photo_or_video_is_reported(session, monkeypatch, tmp_path):
+    notes = tmp_path / "notes.txt"
+    notes.write_text("nothing")
+    monkeypatch.setattr(tk_gui.filedialog, "askopenfilename", lambda **options: str(notes))
+
+    def scenario(root):
+        choose(root, "File", "Open file…")
+        assert status_text(root) == "Cannot open notes.txt as a photo or a video"
+        assert session.source_name() == "photo.png"
+
+    show(session, monkeypatch, scenario)
+
+
+def test_no_file_is_opened_while_recording(session, monkeypatch):
+    asked = []
+    monkeypatch.setattr(tk_gui.filedialog, "askopenfilename", lambda **options: asked.append(options) or "")
+
+    def scenario(root):
+        press(root, "v")
+        press(root, "o")
+        press(root, "v")
+
+    show(session, monkeypatch, scenario)
+    assert asked == []
+
+
+def test_a_camera_that_cannot_be_opened_is_reported(session, monkeypatch):
+    monkeypatch.setattr(session, "open_camera", lambda: False)
+
+    def scenario(root):
+        choose(root, "File", "Camera")
+        assert status_text(root) == "Cannot open camera 0"
+
+    show(session, monkeypatch, scenario)
+
+
+def fake_root(windowing_system: str, font_system: str | None):
+    def call(*arguments):
+        if arguments[0] == "::tk::pkgconfig":
+            if font_system is None:
+                raise tk.TclError("no pkgconfig")
+            return font_system
+        return windowing_system
+
+    return SimpleNamespace(tk=SimpleNamespace(call=call))
+
+
+@pytest.mark.parametrize(
+    ("windowing_system", "font_system", "warns"),
+    [("x11", "x11", True), ("x11", "xft", False), ("win32", "win32", False), ("x11", None, False)],
+)
+def test_a_tk_without_xft_is_warned_about(capsys, windowing_system, font_system, warns):
+    tk_gui.warn_without_xft(fake_root(windowing_system, font_system))
+    assert ("without antialiasing" in capsys.readouterr().err) == warns

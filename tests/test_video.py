@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -233,3 +234,141 @@ def test_the_writer_is_described(sound, language, expected):
         assert "H.265 (libx265)" in description and description != writer_description(writer)
     else:
         assert description == expected
+
+
+class FakeRun:
+    """subprocess.run for a fake ffmpeg that lists some encoders and passes or fails each test encode."""
+
+    def __init__(self, listed: list[str], outcomes: dict[str, object]) -> None:
+        self.listed, self.outcomes, self.tried = listed, outcomes, []
+
+    def __call__(self, command, **options):
+        if "-encoders" in command:
+            return SimpleNamespace(stdout="".join(f" V..... {encoder} some encoder\n" for encoder in self.listed))
+        encoder = command[command.index("-c:v") + 1]
+        self.tried.append(encoder)
+        outcome = self.outcomes[encoder]
+        if isinstance(outcome, BaseException):
+            raise outcome
+        return SimpleNamespace(returncode=outcome)
+
+
+@pytest.fixture
+def fake_ffmpeg(monkeypatch):
+    monkeypatch.setattr(video.shutil, "which", lambda name: f"/fake/{name}")
+    video.best_ffmpeg_encoder.cache_clear()
+    yield lambda run: monkeypatch.setattr(video.subprocess, "run", run)
+    video.best_ffmpeg_encoder.cache_clear()
+
+
+def test_an_encoder_ffmpeg_does_not_list_is_not_tried(fake_ffmpeg):
+    run = FakeRun(["libx264", "mpeg4"], {"libx264": 0, "mpeg4": 0})
+    fake_ffmpeg(run)
+    ffmpeg, (encoder, name, _options) = video.best_ffmpeg_encoder()
+    assert (ffmpeg, encoder, name) == ("/fake/ffmpeg", "libx264", "H.264")
+    assert run.tried == ["libx264"]
+
+
+def test_an_encoder_that_fails_or_hangs_is_passed_over(fake_ffmpeg):
+    run = FakeRun(
+        ["libx265", "hevc_nvenc", "libx264"],
+        {"libx265": 1, "hevc_nvenc": subprocess.TimeoutExpired("ffmpeg", 30), "libx264": 0},
+    )
+    fake_ffmpeg(run)
+    assert video.best_ffmpeg_encoder()[1][0] == "libx264"
+    assert run.tried == ["libx265", "hevc_nvenc", "libx264"]
+
+
+def test_no_working_encoder_means_none(fake_ffmpeg):
+    fake_ffmpeg(FakeRun(["libx265"], {"libx265": 1}))
+    assert video.best_ffmpeg_encoder() is None
+
+
+def test_without_ffprobe_the_sound_cannot_be_told(monkeypatch, tmp_path):
+    monkeypatch.setattr(video.shutil, "which", lambda name: None)
+    assert audio_codec(tmp_path / "any.mp4") is None
+
+
+def test_a_file_ffprobe_cannot_read_has_no_known_sound(tmp_path):
+    path = tmp_path / "notes.txt"
+    path.write_text("no video")
+    assert audio_codec(path) is None
+
+
+@needs_ffmpeg
+@pytest.mark.parametrize("options", [["-crf", "20", "-preset", "ultrafast"], None])
+def test_h264_and_a_bitrate_encoder_write_a_video(tmp_path, monkeypatch, options):
+    ffmpeg = video.best_ffmpeg_encoder()[0]
+    monkeypatch.setattr(video, "best_ffmpeg_encoder", lambda: (ffmpeg, ("libx264", "H.264", options)))
+    path = tmp_path / "out.mp4"
+    writer = VideoWriter(path, None, 64, 48, 30)
+    for _ in range(3):
+        writer.write(solid(100, 64, 48))
+    writer.close()
+    assert len(read_frames(path)) == 3
+    assert writer_description(writer) == "H.264 (libx264)"
+
+
+@needs_ffmpeg
+def test_an_ffmpeg_that_fails_before_any_frame_fails_on_close(tmp_path):
+    writer = VideoWriter(tmp_path / "missing" / "out.mp4", None, 64, 48, 30)
+    with pytest.raises(RuntimeError, match=r"ffmpeg \(.+\) failed: .+"):
+        writer.close()
+
+
+@needs_ffmpeg
+def test_writing_to_an_ffmpeg_that_has_ended_is_an_error(tmp_path):
+    writer = VideoWriter(tmp_path / "missing" / "out.mp4", None, 64, 48, 30)
+    with pytest.raises(RuntimeError, match=r"ffmpeg \(.+\) failed"):
+        for _ in range(10_000):  # ffmpeg ends once it has read enough to open its output
+            writer.write(solid(100, 64, 48))
+    assert writer._process.poll() is not None
+
+
+def test_without_ffmpeg_or_a_codec_opencv_can_use_it_is_an_error(tmp_path, without_ffmpeg, monkeypatch):
+    class ClosedWriter:
+        def __init__(self, *args):
+            pass
+
+        def isOpened(self):
+            return False
+
+        def release(self):
+            pass
+
+    monkeypatch.setattr(video.cv2, "VideoWriter", ClosedWriter)
+    with pytest.raises(RuntimeError, match="OpenCV cannot write video on this system"):
+        VideoWriter(tmp_path / "out.mp4", None, 64, 48, 30)
+
+
+def test_a_video_without_frames_is_an_error(tmp_path, monkeypatch):
+    class EmptyCapture:
+        def __init__(self, path):
+            pass
+
+        def isOpened(self):
+            return True
+
+        def get(self, _property):
+            return 0.0
+
+        def read(self):
+            return False, None
+
+        def release(self):
+            pass
+
+    monkeypatch.setattr(video.cv2, "VideoCapture", EmptyCapture)
+    with pytest.raises(RuntimeError, match="No frames in video"):
+        convert_video(tmp_path / "empty.mp4", tmp_path / "out.mp4", invert)
+
+
+def test_a_render_that_fails_on_the_first_frame_leaves_no_writer(tmp_path, fake_writer):
+    source = write_video(tmp_path / "in.mp4", [100] * 3)
+
+    def render(frame):
+        raise ValueError("render failed")
+
+    with pytest.raises(ValueError, match="render failed"):
+        convert_video(source, tmp_path / "out.mp4", render)
+    assert fake_writer.made == []

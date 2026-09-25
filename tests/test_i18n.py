@@ -1,3 +1,6 @@
+import ctypes
+from types import SimpleNamespace
+
 import pytest
 
 from dog_vision.core import i18n
@@ -66,3 +69,11 @@ def test_without_locale_variables_the_locale_decides(environment):
 def test_without_any_locale_it_is_english(environment):
     assert i18n.system_language() == "en"
 
+
+
+@pytest.mark.parametrize(("language_id", "expected"), [(0x0405, "cs"), (0x0409, "en"), (0x0407, "en")])
+def test_on_windows_the_interface_language_decides(environment, language_id, expected):
+    kernel32 = SimpleNamespace(GetUserDefaultUILanguage=lambda: language_id)
+    environment.setattr(i18n.sys, "platform", "win32")
+    environment.setattr(ctypes, "windll", SimpleNamespace(kernel32=kernel32), raising=False)
+    assert i18n.system_language() == expected
