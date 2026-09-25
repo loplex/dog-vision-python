@@ -6,15 +6,18 @@
 harbour seal see them: the red and the yellow-green merge for every dichromat, and all is grey for
 the seal](docs/apples-species.png)
 
-- [Running it](#running-it) — camera, photo, video, `--window`, `--species`, `--compare`, `--difference`,
-  `--adaptation`, `--strength`, `--chroma-scale`, `--acuity`, `--fov`.
-- [The camera window](#the-camera-window) — the species list, sliders, menus, keys, language and tooltips.
+- [Running it](#running-it) — camera, photo, video, `--window`, `--species`, `--compare`,
+  `--difference`, `--adaptation`, `--strength`, `--chroma-scale`, `--acuity`, `--fov`.
+- [The camera window](#the-camera-window) — the species list, sliders, menus, keys,
+  language and tooltips.
 - [Another GUI toolkit](#another-gui-toolkit) — `LiveSession` and `run(session)`.
-- [Species](#species) — every preset, with its cone peaks and source, and how each sees a test chart.
+- [Species](#species) — every preset, with its cone peaks and source,
+  and how each sees a test chart.
 - [How it works](#how-it-works) — the model in five steps.
 - [Colour saturation](#colour-saturation) — `fixed` or `rnl`, and what the second rests on.
 - [Acuity](#acuity) — blurring to what each species resolves, and when that shows.
-- [Map of differences](#map-of-differences) — where two views differ noticeably, and by what measure.
+- [Map of differences](#map-of-differences) — where two views differ noticeably,
+  and by what measure.
 - [What it cannot show](#what-it-cannot-show) — limits, grouped by whether they can be lifted.
 - [Checking it](#checking-it) — `--info`, `check_docs.py`, `lint-imports` and `pytest`.
 - [References](#references)
@@ -24,7 +27,8 @@ the seal](docs/apples-species.png)
 ## Running it
 
 The dependencies are declared in [`pyproject.toml`](pyproject.toml), and
-[uv](https://docs.astral.sh/uv/) is the only thing to install: `uv run` sets up the rest on first use.
+[uv](https://docs.astral.sh/uv/) is the only thing to install:
+`uv run` sets up the rest on first use.
 The window uses Tkinter.
 The project asks uv for a Python already on the system, because the Tk in uv's own Python builds
 lacks Xft and draws text without antialiasing; the window warns when that is the Tk it got.
@@ -43,8 +47,8 @@ uv run dog-vision --output-dir out photo.jpg    # writes out/photo.dog.png
 uv run dog-vision --adaptation 1 sunset.jpg
 ```
 
-[`./dog-vision`](dog-vision) in the checkout does the same from any directory, with the same options;
-a link to it in a directory on `PATH`, such as `~/.local/bin`, makes it a command.
+[`./dog-vision`](dog-vision) in the checkout does the same from any directory, with the same
+options; a link to it in a directory on `PATH`, such as `~/.local/bin`, makes it a command.
 
 - `--compare` puts a second species where the original would be, with the same settings, so two
   animals can be told apart directly; with a photo, both go into the output side by side.
@@ -166,8 +170,8 @@ Ctrl+C or a right click copies them.
 ### The window starts in the system's language, looked up as gettext does
 
 The window speaks English and Czech.
-A language is one entry in `LANGUAGES` in [`i18n.py`](src/dog_vision/core/i18n.py): its name, its decimal point, and
-its translations, each keyed by the English text as in gettext.
+A language is one entry in `LANGUAGES` in [`i18n.py`](src/dog_vision/core/i18n.py): its name, its
+decimal point, and its translations, each keyed by the English text as in gettext.
 A text reaches a translation through `_()`, or a helper such as `text()` for a widget's label; one
 kept in a variable to be translated where it is shown is marked with `N_()`, as in gettext, so that
 `check_docs.py` finds it.
@@ -293,9 +297,11 @@ saturation scales](docs/species-grid.png)
 The method is the one Brettel, Viénot & Mollon (1997) use for human dichromats:
 
 1. Each cone is modelled with the Govardovskii et al. (2000) pigment template, from its peak alone.
-2. The display is three Gaussian primaries, balanced so that white excites human cones like daylight.
+2. The display is three Gaussian primaries,
+   balanced so that white excites human cones like daylight.
 3. That gives a matrix from linear RGB to the animal's cone excitations.
-   For a dichromat it has one direction it cannot see: colours differing only along it look the same.
+   For a dichromat it has one direction it cannot see:
+   colours differing only along it look the same.
 4. Each pixel is moved along that direction onto the plane R = G, which holds the grey axis and
    the blue–yellow axis.
    Neutral colours therefore stay neutral, and the animal's cones respond to the output exactly as
@@ -394,8 +400,9 @@ Acuity in cycles per degree, where a measurement was found:
 - **`--fov` is that angle**, 60° by default, which is typical of a camera but only a guess for a
   photo. Halving it halves the blur.
 - **An image shows the blur only if it has more pixels per degree than the species resolves.**
-  An image 640 pixels wide spanning 60° has about 11 pixels per degree, so a dog's blur is under half
-  a pixel and invisible, while a 4000-pixel photo of the same scene blurs it by over two pixels.
+  An image 640 pixels wide spanning 60° has about 11 pixels per degree,
+  so a dog's blur is under half a pixel and invisible,
+  while a 4000-pixel photo of the same scene blurs it by over two pixels.
 - **The result is right when it is seen at the angle it spans.** Viewed smaller, the viewer's own
   acuity blurs it further; viewed larger, blur a human would not notice becomes visible.
 
@@ -441,7 +448,8 @@ That catches differences in colour and in sharpness alike.
 
 - **The lens and the macular pigment are ignored.**
   This is the likely reason the model puts the human deuteranope's neutral point well short of the
-  measured value of about 505 nm, while it matches the dog's 480 nm (both from Neitz, Geist & Jacobs 1989).
+  measured value of about 505 nm, while it matches the dog's 480 nm
+  (both from Neitz, Geist & Jacobs 1989).
 - **The display primaries are generic**, not those of the screen in front of you.
 - **Blue–yellow is a convention.** Which human hues stand for a dichromat's single chromatic axis
   is not fixed by physics.
@@ -451,22 +459,24 @@ That catches differences in colour and in sharpness alike.
 
 - `uv run dog-vision --info --species <name>` prints the derived matrices and checks that grey
   is preserved, that the output excites the cones exactly as the input does, and the neutral point.
-- `uv run tools/check_docs.py` checks this README against the code: the species table with its S-cone
-  shares and sources, the relative links and anchors, the neutral points quoted above, and that the
-  test chart and the apple figures are what the code renders
-  ([`render_species_grid.py`](tools/render_species_grid.py), [`render_photo_figures.py`](tools/render_photo_figures.py)).
-  It also checks that each translation in [`i18n.py`](src/dog_vision/core/i18n.py) names every species,
-  describes every label and translates every text the code hands over to be translated, and that
-  every English text it translates still occurs in the code.
+- `uv run tools/check_docs.py` checks this README against the code: the species table with its
+  S-cone shares and sources, the relative links and anchors, the neutral points quoted above, and
+  that the test chart and the apple figures are what the code renders
+  ([`render_species_grid.py`](tools/render_species_grid.py),
+  [`render_photo_figures.py`](tools/render_photo_figures.py)). It also checks that each translation
+  in [`i18n.py`](src/dog_vision/core/i18n.py) names every species, describes every label and
+  translates every text the code hands over to be translated, and that every English text it
+  translates still occurs in the code.
 - `uv run lint-imports` checks that the code keeps its layers: `dog_vision.core` imports neither the
   window nor the command line, and `dog_vision.gui` does not import the command line.
 - `uv run pytest` runs the tests in [`tests/`](tests): the model's invariants (grey stays grey, with
-  the fixed saturation the animal's cones see the output as they see the input, and the RNL one lets a
-  human count the animal's differences), the image pipeline, the facts and their translations, converting and recording video,
-  the command line, `LiveSession`, and the window, driven through its keys and menus. The window's
-  tests run on a virtual display when Xvfb is installed and on `$DISPLAY` otherwise, and are skipped
-  without either; the tests of sound, colours and padding in a video need ffmpeg.
-  `uv run pytest --cov` also lists the lines and branches of `dog_vision` that no test reaches.
+  the fixed saturation the animal's cones see the output as they see the input, and the RNL one lets
+  a human count the animal's differences), the image pipeline, the facts and their translations,
+  converting and recording video, the command line, `LiveSession`, and the window, driven through
+  its keys and menus. The window's tests run on a virtual display when Xvfb is installed and on
+  `$DISPLAY` otherwise, and are skipped without either; the tests of sound, colours and padding in a
+  video need ffmpeg. `uv run pytest --cov` also lists the lines and branches of `dog_vision` that no
+  test reaches.
 
 ## References
 
@@ -557,7 +567,8 @@ That catches differences in colour and in sharpness alike.
 
 ## Credits
 
-The apple photo is [*Shiny red apples*](https://commons.wikimedia.org/wiki/File:Shiny_red_apples.jpg)
+The apple photo is
+[*Shiny red apples*](https://commons.wikimedia.org/wiki/File:Shiny_red_apples.jpg)
 by Leon Brooks, released into the public domain.
 
 ## License
