@@ -6,6 +6,10 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = ["numpy", "opencv-python-headless"]
 
+[project.urls]
+Homepage = "https://github.com/loplex/dog-vision"
+Issues = "https://github.com/loplex/dog-vision/issues"
+
 [project.scripts]
 dog-vision = "dog_vision.cli:main"
 
