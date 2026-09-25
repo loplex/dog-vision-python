@@ -1,3 +1,5 @@
+import shutil
+import subprocess
 import threading
 from typing import ClassVar
 
@@ -47,6 +49,12 @@ class FakeWriter:
         self.aborted = True
 
 
+@pytest.fixture(autouse=True)
+def english(monkeypatch):
+    """Every test in English, whatever language the machine running it asks for."""
+    monkeypatch.setenv("LANGUAGE", "en")
+
+
 @pytest.fixture
 def clock(monkeypatch) -> Clock:
     """Stands in for the clock the recorder reads, and for no other module's."""
@@ -80,3 +88,23 @@ def read_frames(path) -> list[np.ndarray]:
         frames.append(frame)
     capture.release()
     return frames
+
+
+needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="needs ffmpeg")
+
+
+def write_video(path, values: list[int], fps: float = 10, width: int = 64, height: int = 48):
+    """A silent video of one grey frame per value, written with OpenCV alone."""
+    writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height))
+    for value in values:
+        writer.write(solid(value, width, height))
+    writer.release()
+    return path
+
+
+def write_video_with_sound(path, seconds: float = 0.5):
+    """A test pattern with a tone, written with ffmpeg."""
+    command = ["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", f"testsrc=s=64x48:d={seconds}:r=10"]
+    command += ["-f", "lavfi", "-i", f"sine=d={seconds}", "-shortest", "-c:v", "libx264", "-c:a", "aac", str(path)]
+    subprocess.run(command, check=True)
+    return path
