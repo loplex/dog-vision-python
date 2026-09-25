@@ -69,11 +69,16 @@ def print_info(params: Params) -> None:
         k, u = rnl_chroma_matrix(params), chroma_directions(m_animal)
         animal = rnl_metric(params.species, np.eye(len(m_animal)))[:-1, :-1]
         human = u.T @ rnl_metric("human", animal_cone_matrix(Params("human"))) @ u
-        print("  rnl matches JNDs  max |K'BK - A| / |A| =", np.abs(k.T @ human @ k - animal).max() / np.abs(animal).max())
+        print(
+            "  rnl matches JNDs  max |K'BK - A| / |A| =", np.abs(k.T @ human @ k - animal).max() / np.abs(animal).max()
+        )
         if len(m_animal) == 3:
             blue_yellow = np.hstack([np.eye(2), -np.ones((2, 1))]) @ m_animal @ np.array([-0.5, -0.5, 1.0])
             mapped = k @ blue_yellow
-            print("  rnl keeps blue    angle of K d to d =", abs(np.arctan2(*mapped[::-1]) - np.arctan2(*blue_yellow[::-1])))
+            print(
+                "  rnl keeps blue    angle of K d to d =",
+                abs(np.arctan2(*mapped[::-1]) - np.arctan2(*blue_yellow[::-1])),
+            )
     print()
     for label, value, _description in species_facts(params.species):
         print(f"  {label + ':':15s} {' '.join(value)}")
@@ -117,7 +122,9 @@ def convert_file(
             print(f"\rConverting: {share:.0%}", end="", file=sys.stderr, flush=True)
 
     try:
-        writer = convert_video(path, out_path, lambda frame: compose(frame, params, side_by_side, compare, difference)[0], show_progress)
+        writer = convert_video(
+            path, out_path, lambda frame: compose(frame, params, side_by_side, compare, difference)[0], show_progress
+        )
     except RuntimeError as error:
         sys.exit(f"\n{error}")
     finally:
@@ -128,10 +135,14 @@ def convert_file(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        prog="dog-vision", description=f"{__doc__}\n{model.__doc__}", formatter_class=argparse.RawDescriptionHelpFormatter
+        prog="dog-vision",
+        description=f"{__doc__}\n{model.__doc__}",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("image", nargs="?", type=Path, help="photo or video to convert instead of using the camera")
-    parser.add_argument("--window", action="store_true", help="show the photo or video in the window instead of converting it")
+    parser.add_argument(
+        "--window", action="store_true", help="show the photo or video in the window instead of converting it"
+    )
     parser.add_argument("--camera", type=int, default=0, help="camera index (default 0)")
     parser.add_argument("--info", action="store_true", help="print the derived model and exit")
     parser.add_argument(
@@ -143,12 +154,20 @@ def main() -> None:
         " was set to put it in that folder)",
     )
     defaults = Params()
-    parser.add_argument("--species", choices=SPECIES, default=defaults.species, help="animal to simulate (default %(default)s)")
     parser.add_argument(
-        "--adaptation", type=float, default=defaults.adaptation, help="adaptation to the scene mean, 0-1 (default %(default)s)"
+        "--species", choices=SPECIES, default=defaults.species, help="animal to simulate (default %(default)s)"
     )
     parser.add_argument(
-        "--strength", type=float, default=defaults.strength, help="0 = original, 1 = full simulation (default %(default)s)"
+        "--adaptation",
+        type=float,
+        default=defaults.adaptation,
+        help="adaptation to the scene mean, 0-1 (default %(default)s)",
+    )
+    parser.add_argument(
+        "--strength",
+        type=float,
+        default=defaults.strength,
+        help="0 = original, 1 = full simulation (default %(default)s)",
     )
     parser.add_argument(
         "--chroma-scale",

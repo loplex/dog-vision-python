@@ -276,7 +276,9 @@ def test_snapshots_and_recordings_go_to_the_output_folder(tmp_path, clock, fake_
     assert fake_writer.made[0].path.parent == tmp_path / "out" / "new"
 
 
-def test_a_recording_path_does_not_depend_on_the_working_directory_later(session, tmp_path, monkeypatch, clock, fake_writer):
+def test_a_recording_path_does_not_depend_on_the_working_directory_later(
+    session, tmp_path, monkeypatch, clock, fake_writer
+):
     session.render()
     session.start_recording()
     monkeypatch.chdir(tmp_path.parent)  # before the recorder opens its file

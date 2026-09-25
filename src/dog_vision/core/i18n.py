@@ -65,7 +65,9 @@ CZECH = {
     "Conversion failed: {error}": "Převod selhal: {error}",
     "{format} ({encoder}), with the original sound": "{format} ({encoder}), s původním zvukem",
     "{format} ({encoder}); the original has no sound": "{format} ({encoder}); originál nemá zvuk",
-    "{format} ({encoder}), without sound: ffmpeg is not installed": "{format} ({encoder}), bez zvuku: ffmpeg není nainstalovaný",
+    "{format} ({encoder}), without sound: ffmpeg is not installed": (
+        "{format} ({encoder}), bez zvuku: ffmpeg není nainstalovaný"
+    ),
     "{format} ({encoder})": "{format} ({encoder})",
     # Caption
     "original": "originál",

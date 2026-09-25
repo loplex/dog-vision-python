@@ -128,7 +128,9 @@ def species_facts(species: str, language: str = "en") -> list[tuple[str, tuple[s
         facts += [("RNL scale", [_("no colour axis"), _("(sees only grey)")])]
     else:
         low, high, source = S_CONE_FRACTION.get(species, (*ASSUMED_S_CONE_FRACTION, _("assumed")))
-        facts.append(("S cones", [_("{share} of cones").format(share=percent(low, high, language)), *pieces(f"({source})")]))
+        facts.append(
+            ("S cones", [_("{share} of cones").format(share=percent(low, high, language)), *pieces(f"({source})")])
+        )
         if n == 3:
             facts.append(("L : M cones", [f"{i18n.number(ASSUMED_L_TO_M, 'g', language)} : 1", f"({_('assumed')})"]))
         else:

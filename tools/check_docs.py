@@ -179,7 +179,13 @@ def check_translations() -> list[str]:
 def main() -> int:
     readme = ROOT / "README.md"
     text = readme.read_text()
-    errors = check_species_table(text) + check_acuity_table(text) + check_links(readme) + check_neutral_points() + check_translations()
+    errors = (
+        check_species_table(text)
+        + check_acuity_table(text)
+        + check_links(readme)
+        + check_neutral_points()
+        + check_translations()
+    )
     if not render_species_grid.matches_file():
         errors.append("docs/species-grid.png is out of date; run: uv run tools/render_species_grid.py")
     for name in render_photo_figures.stale():

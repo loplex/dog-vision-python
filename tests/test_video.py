@@ -67,7 +67,9 @@ def test_cancelling_before_the_first_frame_writes_nothing(tmp_path):
 def test_cancelling_midway_aborts_the_writer(tmp_path, fake_writer):
     source = write_video(tmp_path / "in.mp4", [100] * 5)
     shares = []
-    assert convert_video(source, tmp_path / "out.mp4", invert, shares.append, cancelled=lambda: len(shares) == 2) is None
+    assert (
+        convert_video(source, tmp_path / "out.mp4", invert, shares.append, cancelled=lambda: len(shares) == 2) is None
+    )
     (writer,) = fake_writer.made
     assert writer.aborted and not writer.closed and len(writer.frames) == 2
 

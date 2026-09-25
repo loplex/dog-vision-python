@@ -16,13 +16,25 @@ from dog_vision.core import facts, imaging, model, species
 OUTPUT = Path(__file__).parent.parent / "docs" / "species-grid.png"
 STRIP_WIDTH = 400
 LABEL_WIDTH = 240
-PATCHES = [(230, 40, 40), (240, 140, 20), (240, 220, 40), (60, 180, 60), (40, 190, 200), (40, 80, 220), (140, 60, 200), (220, 80, 170)]
+PATCHES = [
+    (230, 40, 40),
+    (240, 140, 20),
+    (240, 220, 40),
+    (60, 180, 60),
+    (40, 190, 200),
+    (40, 80, 220),
+    (140, 60, 200),
+    (220, 80, 170),
+]
 
 
 def test_image() -> np.ndarray:
     """A saturated hue sweep from red to magenta above eight patches, as BGR."""
     hue = np.linspace(0, 150, STRIP_WIDTH).astype(np.uint8)  # OpenCV hue runs 0-180
-    hsv = np.stack([np.tile(hue, (40, 1)), np.full((40, STRIP_WIDTH), 255, np.uint8), np.full((40, STRIP_WIDTH), 255, np.uint8)], -1)
+    hsv = np.stack(
+        [np.tile(hue, (40, 1)), np.full((40, STRIP_WIDTH), 255, np.uint8), np.full((40, STRIP_WIDTH), 255, np.uint8)],
+        -1,
+    )
     patches = np.zeros((28, STRIP_WIDTH, 3), np.uint8)
     for i, rgb in enumerate(PATCHES):
         patches[:, i * STRIP_WIDTH // len(PATCHES) : (i + 1) * STRIP_WIDTH // len(PATCHES)] = rgb[::-1]

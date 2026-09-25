@@ -221,7 +221,9 @@ class Section:
 
     def _show(self) -> None:
         s = self.size
-        corners = (0, s * 0.2, s, s * 0.2, s / 2, s * 0.85) if self.is_open else (s * 0.2, 0, s * 0.85, s / 2, s * 0.2, s)
+        corners = (
+            (0, s * 0.2, s, s * 0.2, s / 2, s * 0.85) if self.is_open else (s * 0.2, 0, s * 0.85, s / 2, s * 0.2, s)
+        )
         self.arrow.delete("all")
         self.arrow.create_polygon(corners, fill=self.colour, outline=self.colour)
         if self.is_open:
@@ -547,7 +549,9 @@ def run(session: LiveSession) -> None:
     text(field_of_view.label, "Image spans [degrees]")
     field_of_view.frame.grid(row=1, column=0, sticky="ew", pady=(4, 0))
 
-    view_section = Section(side, section_font, is_open=session.compare is not None or session.difference, on_toggle=fit_panel)
+    view_section = Section(
+        side, section_font, is_open=session.compare is not None or session.difference, on_toggle=fit_panel
+    )
     text(view_section.title, "View")
     view_section.frame.grid(row=5, column=0, sticky="ew", pady=(10, 0))
     view = view_section.body
@@ -555,7 +559,9 @@ def run(session: LiveSession) -> None:
     view.columnconfigure(1, weight=1)
     side_by_side = tk.BooleanVar(value=session.side_by_side)
     side_by_side_box = text(
-        ttk.Checkbutton(view, variable=side_by_side, command=lambda: setattr(session, "side_by_side", side_by_side.get())),
+        ttk.Checkbutton(
+            view, variable=side_by_side, command=lambda: setattr(session, "side_by_side", side_by_side.get())
+        ),
         "Side by side (m)",
     )
     side_by_side_box.grid(row=0, column=0, columnspan=2, sticky="w")
@@ -632,7 +638,9 @@ def run(session: LiveSession) -> None:
         )
         if path:
             error = session.set_output_dir(Path(path))
-            status.configure(text=error or _("Snapshots and recordings go to {folder}").format(folder=session.output_dir))
+            status.configure(
+                text=error or _("Snapshots and recordings go to {folder}").format(folder=session.output_dir)
+            )
 
     convert_to_output_dir = tk.BooleanVar(value=session.settings.convert_to_output_dir)  # the File menu's check
 
@@ -793,7 +801,14 @@ def run(session: LiveSession) -> None:
     chroma_menu = tk.Menu(view_menu, tearoff=False)
     entry(view_menu, "cascade", "Colour saturation", menu=chroma_menu)
     for value in session.chroma_scales:
-        entry(chroma_menu, "radiobutton", chroma_labels[value], value=value, variable=chroma_scale, command=on_chroma_scale)
+        entry(
+            chroma_menu,
+            "radiobutton",
+            chroma_labels[value],
+            value=value,
+            variable=chroma_scale,
+            command=on_chroma_scale,
+        )
     entry(
         view_menu,
         "checkbutton",

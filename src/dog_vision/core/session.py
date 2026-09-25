@@ -45,8 +45,9 @@ class LiveSession:
     frame; a video plays at its own rate and starts over at its end. A GUI changes
     params, side_by_side, compare and difference directly, and calls reset(),
     save_snapshot(), start_recording(), stop_recording(), open_file(), open_camera(),
-    convert_source(), set_output_dir(), set_convert_to_output_dir() and close(). While recording, a video's size cannot change, so a GUI
-    leaves side_by_side, difference and the source as they are.
+    convert_source(), set_output_dir(), set_convert_to_output_dir() and close(). While
+    recording, a video's size cannot change, so a GUI leaves side_by_side, difference
+    and the source as they are.
     """
 
     def __init__(
@@ -168,7 +169,9 @@ class LiveSession:
         settings = (dataclasses.astuple(self.params), self.side_by_side, self.compare, self.difference)
         if self._last_input is not None and self._last_input[0] is frame and self._last_input[1] == settings:
             return self._last_rgb
-        self._last_images, self._difference_share = compose(frame, self.params, self.side_by_side, self.compare, self.difference)
+        self._last_images, self._difference_share = compose(
+            frame, self.params, self.side_by_side, self.compare, self.difference
+        )
         self._last_input = (frame, settings)
         self._last_rgb = self._last_images[..., ::-1]
         if self._recorder is not None:
@@ -206,7 +209,7 @@ class LiveSession:
         self.compare = self.initial_compare
 
     def species_facts(self, species: str | None = None) -> list[tuple[str, str, str]]:
-        """What the simulation knows about a species, the current one by default, as (label, value, description) rows."""
+        """The simulation's facts about a species, the current one by default, as (label, value, description) rows."""
         return species_facts(species or self.params.species, self.language)
 
     @property
@@ -237,7 +240,11 @@ class LiveSession:
 
         The folder is made if it is missing; if it cannot be, writing the file says so.
         """
-        shown = self.params.species if self.compare is None or not self.side_by_side else f"{self.compare}-vs-{self.params.species}"
+        shown = (
+            self.params.species
+            if self.compare is None or not self.side_by_side
+            else f"{self.compare}-vs-{self.params.species}"
+        )
         folder = self.output_dir
         try:
             folder.mkdir(parents=True, exist_ok=True)
@@ -280,7 +287,9 @@ class LiveSession:
         """How the running or the last recording stands, or None if there was none."""
         if self._recorder is not None:
             minutes, seconds = divmod(int(time.monotonic() - self._recorder.started), 60)
-            return self.translate("Recording {name}: {time}").format(name=self._recorder.path.name, time=f"{minutes}:{seconds:02d}")
+            return self.translate("Recording {name}: {time}").format(
+                name=self._recorder.path.name, time=f"{minutes}:{seconds:02d}"
+            )
         recorded = self._recorded
         if recorded is None:
             return None
@@ -305,7 +314,8 @@ class LiveSession:
         if self.source is None or self.converting:
             return False
         source, is_video = self.source, self.source_is_video
-        params, side_by_side, compare, difference = dataclasses.replace(self.params), self.side_by_side, self.compare, self.difference
+        params = dataclasses.replace(self.params)
+        side_by_side, compare, difference = self.side_by_side, self.compare, self.difference
         out_path = converted_path(source, is_video)
         if self.settings.convert_to_output_dir:
             out_path = self.output_dir / out_path.name

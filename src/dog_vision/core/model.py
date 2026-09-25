@@ -146,7 +146,9 @@ def cone_shares(species: str) -> np.ndarray:
     fraction, _ = s_cone_fraction(species)
     if len(SPECIES[species]) == 2:
         return np.array([fraction, 1 - fraction])
-    return np.array([fraction, (1 - fraction) / (1 + ASSUMED_L_TO_M), (1 - fraction) * ASSUMED_L_TO_M / (1 + ASSUMED_L_TO_M)])
+    return np.array(
+        [fraction, (1 - fraction) / (1 + ASSUMED_L_TO_M), (1 - fraction) * ASSUMED_L_TO_M / (1 + ASSUMED_L_TO_M)]
+    )
 
 
 def symmetric_power(matrix: np.ndarray, power: float) -> np.ndarray:
@@ -167,7 +169,13 @@ def rnl_metric(species: str, cone_matrix_rgb: np.ndarray) -> np.ndarray:
     shares = cone_shares(species)
     noise = 1 / np.sqrt(shares / shares.max())
     to_chroma = np.hstack([np.eye(n - 1), -np.ones((n - 1, 1))])
-    return cone_matrix_rgb.T @ to_chroma.T @ np.linalg.inv(to_chroma @ np.diag(noise**2) @ to_chroma.T) @ to_chroma @ cone_matrix_rgb
+    return (
+        cone_matrix_rgb.T
+        @ to_chroma.T
+        @ np.linalg.inv(to_chroma @ np.diag(noise**2) @ to_chroma.T)
+        @ to_chroma
+        @ cone_matrix_rgb
+    )
 
 
 def rnl_chroma_matrix(params: Params) -> np.ndarray:

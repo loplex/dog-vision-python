@@ -57,7 +57,9 @@ DIFFERENCE_FULL_RED = 10.0  # Delta E*ab at which the difference map is fully re
 def lab_from_bgr(image_bgr: np.ndarray) -> np.ndarray:
     """CIELAB (D65) of an 8-bit sRGB image in BGR order."""
     linear = _DECODE[image_bgr][..., ::-1]
-    xyz = linear @ np.array([[0.4124, 0.3576, 0.1805], [0.2126, 0.7152, 0.0722], [0.0193, 0.1192, 0.9505]], np.float32).T
+    xyz = (
+        linear @ np.array([[0.4124, 0.3576, 0.1805], [0.2126, 0.7152, 0.0722], [0.0193, 0.1192, 0.9505]], np.float32).T
+    )
     t = xyz / np.array([0.95047, 1.0, 1.08883], np.float32)
     f = np.where(t > (6 / 29) ** 3, np.cbrt(t), t / (3 * (6 / 29) ** 2) + 4 / 29)
     return np.stack([116 * f[..., 1] - 16, 500 * (f[..., 0] - f[..., 1]), 200 * (f[..., 1] - f[..., 2])], axis=-1)

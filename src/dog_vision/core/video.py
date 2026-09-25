@@ -1,4 +1,4 @@
-"""Converting a photo or a video, recording the window's view, and writing the video with the best method the system has.
+"""Converting a photo or a video, recording the window's view, and writing video with the best method the system has.
 
 With ffmpeg installed, the first encoder in FFMPEG_ENCODERS that actually encodes a
 frame on this machine is used, and the sound of the original is carried over. A

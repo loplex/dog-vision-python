@@ -55,7 +55,10 @@ def row(cells: list[np.ndarray]) -> np.ndarray:
 def species_figure(photo: np.ndarray) -> np.ndarray:
     small = shrink(photo)
     cells = [captioned(small, "original")]
-    cells += [captioned(imaging.simulate(small, model.Params(species)), facts.species_label(species)) for species in SPECIES_SHOWN]
+    cells += [
+        captioned(imaging.simulate(small, model.Params(species)), facts.species_label(species))
+        for species in SPECIES_SHOWN
+    ]
     top, bottom = row(cells[:3]), row(cells[3:])
     return np.vstack([top, np.full((8, top.shape[1], 3), 255, np.uint8), bottom])
 
