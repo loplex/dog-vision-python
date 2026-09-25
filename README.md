@@ -89,7 +89,8 @@ When the open sections do not fit the window's height, the controls get a scroll
 list keeps four rows.
 *View › Side panel* or F9 hides the controls, and the images take their room.
 What works on the window as a whole — the source, saving, the language — is in the menu bar, and a
-status bar at the bottom says what is shown, how a conversion stands and what the last action did.
+status bar at the bottom says what is shown, how a conversion or a recording stands and what the
+last action did.
 The species, the *View* section's controls, the colour saturation and the acuity blur are in the
 menu bar too, under *Species* and *View*, so they stay at hand with the side panel hidden.
 The controls are grouped into sections, and a click on a section's title opens or closes it.
@@ -117,6 +118,7 @@ the facts about the dog and the simulation's controls on the right](docs/window.
 | *File › Camera*                 | back to the camera                                  |
 | *File › Convert file*           | writes the open file as shown, at full size         |
 | *File › Save snapshot*, `s`     | saves `dog-<species>-<time>.png` in the current dir |
+| *File › Record video*, `v`      | records `dog-<species>-<time>.mp4`; again stops it  |
 | *File › Quit*, `q`, Esc         | quits                                               |
 | *View › Side panel*, F9         | hides or shows the controls on the right            |
 | *Language* menu                 | the window's language, starting as the system's     |
@@ -131,6 +133,13 @@ Ctrl+C or a right click copies them.
 - **A video plays at its own rate** and starts over at its end.
 - **A snapshot is saved at the size the images are rendered**, not at the size the window shows
   them: the camera's resolution, or a large file's scaled-down view.
+- **A recording is the view as shown**, at that same size, and with every change made while it runs:
+  another species, a slider, the left image.
+  A video cannot change its size, so *Side by side*, *Map of differences* and the source are locked
+  until it stops.
+- **A recording keeps the clock's pace**: it is written at 30 frames per second, each frame repeated
+  for as long as it was shown, whatever rate the camera delivers.
+  It is encoded as a conversion is, on a thread of its own, and has no sound.
 
 ### The window starts in the system's language, looked up as gettext does
 
@@ -164,6 +173,9 @@ Everything else sits in `LiveSession` in [`session.py`](src/dog_vision/core/sess
   camera, and `source_name()` says what is shown.
 - `convert_source()` converts the open file in the background with the current settings;
   `converting` and `conversion_status()` say how it stands.
+- `start_recording()` and `stop_recording()` record the view as `render()` shows it; `recording` and
+  `recording_status()` say how it stands, and while `recording` is true the window leaves
+  `side_by_side`, `difference` and the source alone.
 - `params` (species, adaptation, strength, chroma scale, acuity, field of view), `side_by_side`,
   `compare` (the species on the left, or `None` for the original) and `difference` are plain
   attributes to set.

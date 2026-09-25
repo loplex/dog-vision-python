@@ -325,6 +325,8 @@ def run(session: LiveSession) -> None:
     source_name.pack(side="left")
     conversion = ttk.Label(status_bar)
     conversion.pack(side="left", padx=(24, 0))
+    recording_status = ttk.Label(status_bar)
+    recording_status.pack(side="left", padx=(24, 0))
     status = ttk.Label(status_bar)
     status.pack(side="left", padx=(24, 0))
 
@@ -552,10 +554,11 @@ def run(session: LiveSession) -> None:
     view.columnconfigure(0, weight=0)
     view.columnconfigure(1, weight=1)
     side_by_side = tk.BooleanVar(value=session.side_by_side)
-    text(
+    side_by_side_box = text(
         ttk.Checkbutton(view, variable=side_by_side, command=lambda: setattr(session, "side_by_side", side_by_side.get())),
         "Side by side (m)",
-    ).grid(row=0, column=0, columnspan=2, sticky="w")
+    )
+    side_by_side_box.grid(row=0, column=0, columnspan=2, sticky="w")
     text(ttk.Label(view), "Left image").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=(4, 0))
     left = ttk.Combobox(view, values=[_("original"), *session.species_labels], state="readonly", width=24)
     left.grid(row=1, column=1, sticky="ew", pady=(4, 0))
@@ -573,12 +576,15 @@ def run(session: LiveSession) -> None:
 
     left.bind("<<ComboboxSelected>>", lambda _event: set_compare(left.current()))
     difference = tk.BooleanVar(value=session.difference)
-    text(
+    difference_box = text(
         ttk.Checkbutton(view, variable=difference, command=lambda: setattr(session, "difference", difference.get())),
         "Map of differences (d)",
-    ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(4, 0))
+    )
+    difference_box.grid(row=2, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
     def toggle_difference() -> None:
+        if session.recording:  # a recording keeps its size
+            return
         difference.set(not difference.get())
         session.difference = difference.get()
 
@@ -616,11 +622,24 @@ def run(session: LiveSession) -> None:
         name = session.save_snapshot()
         status.configure(text=_("Saved {name}").format(name=name) if name else _("No frame yet"))
 
+    recording = tk.BooleanVar(value=False)  # the File menu's check
+
+    def toggle_recording() -> None:
+        if session.recording:
+            session.stop_recording()
+        else:
+            session.start_recording()
+        recording.set(session.recording)
+
     def toggle_side_by_side() -> None:
+        if session.recording:
+            return
         side_by_side.set(not side_by_side.get())
         session.side_by_side = side_by_side.get()
 
     def open_file() -> None:
+        if session.recording:
+            return
         patterns = " ".join(f"*.{extension} *.{extension.upper()}" for extension in FILE_EXTENSIONS)
         path = filedialog.askopenfilename(
             parent=root,
@@ -684,11 +703,12 @@ def run(session: LiveSession) -> None:
     root.configure(menu=menu_bar)
     file_menu = tk.Menu(menu_bar, tearoff=False)
     entry(menu_bar, "cascade", "File", menu=file_menu)
-    entry(file_menu, "command", "Open file…", command=open_file, accelerator="o")
+    open_entry = entry(file_menu, "command", "Open file…", command=open_file, accelerator="o")
     camera = entry(file_menu, "command", "Camera", command=open_camera)
     convert = entry(file_menu, "command", "Convert file", command=session.convert_source)
     file_menu.add_separator()
     entry(file_menu, "command", "Save snapshot", command=save, accelerator="s")
+    entry(file_menu, "checkbutton", "Record video", variable=recording, command=toggle_recording, accelerator="v")
     file_menu.add_separator()
     entry(file_menu, "command", "Quit", command=root.destroy, accelerator="q")
 
@@ -699,11 +719,23 @@ def run(session: LiveSession) -> None:
             menu.entryconfigure(index, state=state)
 
     def show_source() -> None:
-        """Make the menu and the status bar reflect the session; called on every frame, as a conversion runs on."""
+        """Make the menus, the controls and the status bar reflect the session.
+
+        Called on every frame, as a conversion or a recording runs on. While recording, the
+        controls that would change the video's size are disabled.
+        """
         source_name.configure(text=session.source_name())
-        enable(file_menu, camera, session.source is not None)
+        free = not session.recording
+        enable(file_menu, open_entry, free)
+        enable(file_menu, camera, session.source is not None and free)
         enable(file_menu, convert, session.source is not None and not session.converting)
+        enable(view_menu, side_by_side_entry, free)
+        enable(view_menu, difference_entry, free)
+        for box in (side_by_side_box, difference_box):
+            if box.instate(["disabled"]) == free:
+                box.state(["!disabled" if free else "disabled"])
         conversion.configure(text=session.conversion_status() or "")
+        recording_status.configure(text=session.recording_status() or "")
 
     # The species and the View section's controls are in the menus too, for when the side panel is hidden;
     # they share the panel's variables, so either shows what the other set.
@@ -713,7 +745,7 @@ def run(session: LiveSession) -> None:
     entry(menu_bar, "cascade", "View", menu=view_menu)
     entry(view_menu, "checkbutton", "Side panel", variable=panel_shown, command=show_panel, accelerator="F9")
     view_menu.add_separator()
-    entry(
+    side_by_side_entry = entry(
         view_menu,
         "checkbutton",
         "Side by side",
@@ -723,7 +755,7 @@ def run(session: LiveSession) -> None:
     )
     left_menu = tk.Menu(view_menu, tearoff=False)
     entry(view_menu, "cascade", "Left image", menu=left_menu)
-    entry(
+    difference_entry = entry(
         view_menu,
         "checkbutton",
         "Map of differences",
@@ -805,6 +837,7 @@ def run(session: LiveSession) -> None:
     root.bind("<KeyPress-d>", lambda _: toggle_difference())
     root.bind("<KeyPress-r>", lambda _: reset())
     root.bind("<KeyPress-s>", lambda _: save())
+    root.bind("<KeyPress-v>", lambda _: toggle_recording())
     root.bind("<KeyPress-o>", lambda _: open_file())
     root.bind("<F9>", lambda _: toggle_panel())
     root.bind("<KeyPress-q>", lambda _: root.destroy())

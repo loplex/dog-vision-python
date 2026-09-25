@@ -15,9 +15,15 @@ from dog_vision.core.i18n import N_
 from dog_vision.core.imaging import compose
 from dog_vision.core.model import CHROMA_SCALES, Params
 from dog_vision.core.species import SPECIES
-from dog_vision.core.video import convert_video, converted_path, writer_description
+from dog_vision.core.video import (
+    Recorder,
+    convert_video,
+    converted_path,
+    writer_description,
+)
 
 PREVIEW_LONGEST_SIDE = 1280  # pixels a file is shown at in the window; converting it keeps its size
+RECORDING_FINISH_S = 30  # seconds close() waits for a stopped recording to be written
 
 
 def preview(image: np.ndarray) -> np.ndarray:
@@ -36,7 +42,9 @@ class LiveSession:
     thread, so a GUI can poll render() from its own timer without waiting for the next
     frame; a video plays at its own rate and starts over at its end. A GUI changes
     params, side_by_side, compare and difference directly, and calls reset(),
-    save_snapshot(), open_file(), open_camera(), convert_source() and close().
+    save_snapshot(), start_recording(), stop_recording(), open_file(), open_camera(),
+    convert_source() and close(). While recording, a video's size cannot change, so a GUI
+    leaves side_by_side, difference and the source as they are.
     """
 
     def __init__(self, camera_index: int, initial: Params, compare: str | None = None, path: Path | None = None) -> None:
@@ -65,6 +73,8 @@ class LiveSession:
         self._conversion_progress: float | None = None
         self._conversion_result: tuple[str, dict[str, str]] | None = None  # English text and its fields
         self._cancel_conversion = threading.Event()
+        self._recorder: Recorder | None = None  # while recording
+        self._recorded: Recorder | None = None  # the last recording stopped, finished or not
         if path is not None and not self.open_file(path):
             sys.exit(f"Cannot read image or video: {path}")
         if path is None and not self.open_camera():
@@ -148,6 +158,8 @@ class LiveSession:
         self._last_images, self._difference_share = compose(frame, self.params, self.side_by_side, self.compare, self.difference)
         self._last_input = (frame, settings)
         self._last_rgb = self._last_images[..., ::-1]
+        if self._recorder is not None:
+            self._recorder.add(self._last_images)
         return self._last_rgb
 
     def translate(self, text: str) -> str:
@@ -184,14 +196,52 @@ class LiveSession:
         """What the simulation knows about a species, the current one by default, as (label, value, description) rows."""
         return species_facts(species or self.params.species, self.language)
 
+    def _output_name(self, extension: str) -> str:
+        """A file name for the view as shown now, e.g. dog-cat-20260925-105600.png."""
+        shown = self.params.species if self.compare is None or not self.side_by_side else f"{self.compare}-vs-{self.params.species}"
+        return f"dog-{shown}-{time.strftime('%Y%m%d-%H%M%S')}.{extension}"
+
     def save_snapshot(self) -> str | None:
         """Write the last rendered view to the working directory and return the file name."""
         if self._last_images is None:
             return None
-        shown = self.params.species if self.compare is None or not self.side_by_side else f"{self.compare}-vs-{self.params.species}"
-        name = f"dog-{shown}-{time.strftime('%Y%m%d-%H%M%S')}.png"
+        name = self._output_name("png")
         cv2.imwrite(name, self._last_images)
         return name
+
+    @property
+    def recording(self) -> bool:
+        return self._recorder is not None
+
+    def start_recording(self) -> bool:
+        """Record the view as shown to dog-<species>-<time>.mp4 in the working directory; False if recording."""
+        if self._recorder is not None:
+            return False
+        self._recorder = Recorder(Path(self._output_name("mp4")))
+        if self._last_images is not None:  # a still photo renders no new frame to start with
+            self._recorder.add(self._last_images)
+        return True
+
+    def stop_recording(self) -> None:
+        """Stop recording; the video is finished in the background, as recording_status() says."""
+        if self._recorder is not None:
+            self._recorder.stop()
+            self._recorded, self._recorder = self._recorder, None
+
+    def recording_status(self) -> str | None:
+        """How the running or the last recording stands, or None if there was none."""
+        if self._recorder is not None:
+            minutes, seconds = divmod(int(time.monotonic() - self._recorder.started), 60)
+            return self.translate("Recording {name}: {time}").format(name=self._recorder.path.name, time=f"{minutes}:{seconds:02d}")
+        recorded = self._recorded
+        if recorded is None:
+            return None
+        if not recorded.done:
+            return self.translate("Finishing {name}").format(name=recorded.path.name)
+        if recorded.error is not None:
+            return self.translate("Recording failed: {error}").format(error=recorded.error)
+        description = writer_description(recorded.writer, self.language)
+        return self.translate("Wrote {name}: {description}").format(name=recorded.path.name, description=description)
 
     @property
     def converting(self) -> bool:
@@ -255,6 +305,9 @@ class LiveSession:
         return self.translate(text).format(**fields)
 
     def close(self) -> None:
+        self.stop_recording()
+        if self._recorded is not None:
+            self._recorded.join(RECORDING_FINISH_S)
         self._cancel_conversion.set()
         if self._conversion is not None:
             self._conversion.join(timeout=5)

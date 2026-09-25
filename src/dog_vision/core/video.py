@@ -1,4 +1,4 @@
-"""Converting a photo or a video, and writing the video with the best method the system has.
+"""Converting a photo or a video, recording the window's view, and writing the video with the best method the system has.
 
 With ffmpeg installed, the first encoder in FFMPEG_ENCODERS that actually encodes a
 frame on this machine is used, and the sound of the original is carried over. A
@@ -8,9 +8,11 @@ OpenCV does not handle audio.
 """
 
 import functools
+import queue
 import shutil
 import subprocess
 import threading
+import time
 from pathlib import Path
 
 import cv2
@@ -36,6 +38,8 @@ FFMPEG_ENCODERS = [
     ("mpeg4", "MPEG-4", ["-q:v", "3"]),
 ]
 BITS_PER_PIXEL = 0.1  # of every frame, for the encoders without a quality target
+RECORDING_FPS = 30  # frames per second a recording is written at, whatever rate its frames come at
+RECORDING_QUEUE = 8  # frames a recording holds for its encoder before it drops the newest
 
 # OpenCV's own codecs, best first, for a system without ffmpeg.
 OPENCV_CODECS = [("hvc1", "H.265"), ("avc1", "H.264"), ("mp4v", "MPEG-4")]
@@ -89,28 +93,35 @@ class VideoWriter:
     """An .mp4 fed BGR frames, carrying over the sound of the video they come from where it can.
 
     After it is made, format_name and encoder say how it is written, and sound is "kept",
-    "none" (the original has none), "lost" (no ffmpeg) or "unknown" (no ffprobe to tell).
+    "none" (the original has none), "lost" (no ffmpeg), "unknown" (no ffprobe to tell) or
+    "silent" (no video to take it from, as for a recording).
     """
 
-    def __init__(self, path: Path, sound_from: Path, width: int, height: int, fps: float) -> None:
+    def __init__(self, path: Path, sound_from: Path | None, width: int, height: int, fps: float) -> None:
         self.path = path
         found = best_ffmpeg_encoder()
         self._process: subprocess.Popen | None = None
         self._writer: cv2.VideoWriter | None = None
         if found is None:
             self._open_opencv(width, height, fps)
-            self.sound = "lost"
+            self.sound = "lost" if sound_from is not None else "silent"
             return
         ffmpeg, (self.encoder, self.format_name, options) = found
         options = list(options or ["-b:v", str(round(width * height * fps * BITS_PER_PIXEL))])
         if self.format_name == "H.265":
             options += ["-tag:v", "hvc1"]  # the tag Apple's players need to play it
-        codec = audio_codec(sound_from)
-        self.sound = {None: "unknown", "": "none"}.get(codec, "kept")
         command = [ffmpeg, "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{width}x{height}"]
-        command += ["-r", f"{fps:.6g}", "-i", "-", "-i", str(sound_from), "-map", "0:v", "-map", "1:a:0?"]
+        command += ["-r", f"{fps:.6g}", "-i", "-"]
+        if sound_from is None:
+            self.sound = "silent"
+            sound = []
+        else:
+            codec = audio_codec(sound_from)
+            self.sound = {None: "unknown", "": "none"}.get(codec, "kept")
+            command += ["-i", str(sound_from), "-map", "0:v", "-map", "1:a:0?"]
+            sound = ["-c:a", "copy" if codec in MP4_AUDIO else "aac"]
         command += ["-vf", VIDEO_FILTER, "-c:v", self.encoder, *options, *BT709_TAGS]
-        command += ["-c:a", "copy" if codec in MP4_AUDIO else "aac", "-movflags", "+faststart", str(path)]
+        command += [*sound, "-movflags", "+faststart", str(path)]
         self._process = subprocess.Popen(command, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
         # Drained on a thread of its own, so that a chatty ffmpeg cannot fill the pipe and stall.
         self._errors: list[bytes] = []
@@ -163,6 +174,85 @@ class VideoWriter:
         self._drain.join()
         message = b"".join(self._errors).decode(errors="replace").strip()
         raise RuntimeError(f"ffmpeg ({self.encoder}) failed: {message}")
+
+
+class Recorder:
+    """An .mp4 of frames handed over as they are shown, written at RECORDING_FPS on a thread of its own.
+
+    Each frame is repeated for as long as it was shown, so the video keeps the clock's pace
+    whether frames come faster or slower than that. A frame that comes while the encoder is
+    behind is dropped, and the one before it shown longer; so is one of another size than the
+    first, which a video cannot change. After stop() the thread finishes the file by itself:
+    done says when, and writer or error how it went.
+    """
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.started = time.monotonic()
+        self.writer: VideoWriter | None = None
+        self.error: str | None = None
+        self._frames: queue.Queue[tuple[float, np.ndarray]] = queue.Queue(maxsize=RECORDING_QUEUE)
+        self._stopped_at: float | None = None
+        self._first_at = 0.0  # when the first frame came, the video's start
+        self._shown: np.ndarray | None = None
+        self._written = 0
+        self._thread = threading.Thread(target=self._record, daemon=True)
+        self._thread.start()
+
+    def add(self, frame: np.ndarray) -> None:
+        """Show frame from now on; it must not be changed afterwards."""
+        try:
+            self._frames.put_nowait((time.monotonic(), frame))
+        except queue.Full:
+            pass
+
+    def stop(self) -> None:
+        self._stopped_at = time.monotonic()
+
+    @property
+    def done(self) -> bool:
+        return not self._thread.is_alive()
+
+    def join(self, timeout: float) -> None:
+        self._thread.join(timeout)
+
+    def _record(self) -> None:
+        try:
+            while True:
+                try:
+                    at, frame = self._frames.get(timeout=0.05)
+                except queue.Empty:
+                    if self._stopped_at is not None:
+                        break
+                    continue
+                self._show(at, frame)
+            if self._shown is None:
+                raise RuntimeError("No frame was shown while recording")
+            self._write_until(self._stopped_at)
+            if self._written == 0:  # stopped within half a frame of the first
+                self.writer.write(self._shown)
+            self.writer.close()
+        except (RuntimeError, OSError) as error:  # kept for the window, not lost with the thread
+            self.error = str(error)
+            if self.writer is not None:
+                self.writer.abort()
+
+    def _show(self, at: float, frame: np.ndarray) -> None:
+        if self._shown is None:
+            self._first_at = at
+            self.writer = VideoWriter(self.path, None, frame.shape[1], frame.shape[0], RECORDING_FPS)
+        else:
+            self._write_until(at)
+            if frame.shape != self._shown.shape:
+                return
+        self._shown = frame
+
+    def _write_until(self, at: float) -> None:
+        """Repeat the frame shown for every frame of the video that falls before the time at."""
+        due = round((at - self._first_at) * RECORDING_FPS)
+        while self._written < due:
+            self.writer.write(self._shown)
+            self._written += 1
 
 
 def converted_path(path: Path, is_video: bool) -> Path:
@@ -218,5 +308,6 @@ def writer_description(writer: VideoWriter, language: str = "en") -> str:
         "none": N_("{format} ({encoder}); the original has no sound"),
         "lost": N_("{format} ({encoder}), without sound: ffmpeg is not installed"),
         "unknown": N_("{format} ({encoder})"),
+        "silent": N_("{format} ({encoder})"),
     }[writer.sound]
     return i18n.translate(template, language).format(format=writer.format_name, encoder=writer.encoder)
