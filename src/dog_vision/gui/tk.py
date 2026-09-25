@@ -805,10 +805,14 @@ def run(session: LiveSession) -> None:
             show_captions(texts, photo.width())
             image.photo = photo  # Tk drops images that Python no longer references
             if not sized:
-                # The first frame sets the window to its natural size; fixing that geometry
-                # stops each new image from resizing the window again.
+                # The first frame sets the window to its natural size, but no larger than the
+                # screen holds; fixing that geometry stops each new image from resizing the window
+                # again, and the next frame is fitted to the images' share of it.
                 root.update_idletasks()
-                root.geometry(root.geometry())
+                largest_width, largest_height = root.wm_maxsize()
+                width = min(root.winfo_reqwidth(), largest_width)
+                height = min(root.winfo_reqheight(), largest_height)
+                root.geometry(f"{width}x{height}")
                 sized = True
         root.after(FRAME_INTERVAL_MS, tick)
 

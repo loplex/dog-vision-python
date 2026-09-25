@@ -82,6 +82,7 @@ video is encoded with the first of these that works on the machine:
 
 The images are on the left, each with a line centred under it saying what it shows, and the controls
 of the simulation on the right.
+The window opens as large as the first image needs, and no larger than the screen.
 The images follow the window's size; the controls keep theirs, as wide as with every section open,
 so opening or closing one does not resize the images.
 When the open sections do not fit the window's height, the controls get a scrollbar and the species
