@@ -64,6 +64,9 @@ CZECH = {
     "{0}%": "{0} %",
     "{0}%–{1}%": "{0}–{1} %",
     "Colour vision": "Barevné vidění",
+    "monochromat": "monochromat",
+    "dichromat": "dichromat",
+    "trichromat": "trichromat",
     "{kind}, 1 cone type": "{kind}, 1 typ čípků",
     "{kind}, {n} cone types": "{kind}, {n} typy čípků",
     "Cone peaks": "Maxima čípků",
@@ -356,6 +359,11 @@ LANGUAGES = {
     "cs": Language("Čeština", ",", CZECH, CZECH_SPECIES),
     "en": Language("English"),
 }
+
+
+def N_(text: str) -> str:
+    """Mark a text as one to translate where it is shown, as gettext's N_ does; it is returned as it is."""
+    return text
 
 
 def translate(text: str, language: str) -> str:

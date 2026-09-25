@@ -6,8 +6,9 @@
 - The neutral points quoted under "What it cannot show" still hold for the model.
 - docs/species-grid.png is what render_species_grid.py renders from the current code, and the
   apple figures are what render_photo_figures.py does.
-- Every language in i18n names every species and describes every label, and every English
-  text it translates still occurs in the code, so none silently stays English.
+- Every language in i18n names every species and describes every label, translates every text
+  the code hands over to be translated, and translates no English text the code no longer has,
+  so none silently stays English.
 
 External URLs are not fetched. Exits non-zero and names each mismatch.
 """
@@ -123,11 +124,43 @@ def string_constants(path: Path) -> set[str]:
     return {node.value for node in ast.walk(tree) if isinstance(node, ast.Constant) and isinstance(node.value, str)}
 
 
+# Where the code hands a text over to be translated, as xgettext's --keyword options say it: the
+# function's name, and which of its arguments is the English text. N_ marks a text kept to be
+# translated later, where it is shown, as in gettext.
+TRANSLATED_ARGUMENTS = {"_": 0, "N_": 0, "translate": 0, "text": 1, "entry": 2}
+
+
+def texts_of(node: ast.expr) -> set[str]:
+    """The string constants an argument can be: itself, or either branch of a conditional expression."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return {node.value}
+    if isinstance(node, ast.IfExp):
+        return texts_of(node.body) | texts_of(node.orelse)
+    return set()
+
+
+def translated_texts(path: Path) -> set[str]:
+    """Every English text a Python file hands over to be translated, by TRANSLATED_ARGUMENTS."""
+    texts = set()
+    for node in ast.walk(ast.parse(path.read_text())):
+        if not isinstance(node, ast.Call):
+            continue
+        function = node.func
+        name = function.id if isinstance(function, ast.Name) else getattr(function, "attr", None)
+        index = TRANSLATED_ARGUMENTS.get(name)
+        if index is not None and index < len(node.args):
+            texts |= texts_of(node.args[index])
+    return texts
+
+
 def check_translations() -> list[str]:
     errors = []
     # Every module but the catalogue, which holds each English text it translates.
     modules = [path for path in (ROOT / "src" / "dog_vision").rglob("*.py") if path.name != "i18n.py"]
     code = set().union(*(string_constants(path) for path in modules))
+    wanted = set().union(*(translated_texts(path) for path in modules))
+    # The labels are dictionary keys, looked up to translate them.
+    wanted |= set(facts.FACT_DESCRIPTIONS) | set(tk_gui.DESCRIPTIONS)
     for name, language in i18n.LANGUAGES.items():
         if language.species and list(language.species) != list(species.SPECIES):
             errors.append(f"i18n language {name} names {list(language.species)}, SPECIES has {list(species.SPECIES)}")
@@ -135,6 +168,8 @@ def check_translations() -> list[str]:
             if english not in code:
                 errors.append(f"i18n language {name} translates {english!r}, which the code no longer contains")
         if language.texts:
+            for english in sorted(wanted - set(language.texts)):
+                errors.append(f"i18n language {name} has no translation of {english!r}")
             for label, english in {**facts.FACT_DESCRIPTIONS, **tk_gui.DESCRIPTIONS}.items():
                 if english not in language.texts:
                     errors.append(f"i18n language {name} has no translation of the description of {label!r}")

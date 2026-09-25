@@ -11,6 +11,7 @@ import numpy as np
 
 from dog_vision.core import i18n
 from dog_vision.core.facts import percent, species_facts, species_label
+from dog_vision.core.i18n import N_
 from dog_vision.core.imaging import compose
 from dog_vision.core.model import CHROMA_SCALES, Params
 from dog_vision.core.species import SPECIES
@@ -217,15 +218,15 @@ class LiveSession:
                 if is_video:
                     writer = convert_video(source, out_path, render, self._set_progress, self._cancel_conversion.is_set)
                     if writer is not None:
-                        result = ("Wrote {name}: {description}", {"name": out_path.name, "writer": writer})
+                        result = (N_("Wrote {name}: {description}"), {"name": out_path.name, "writer": writer})
                 else:
                     image = cv2.imread(str(source), cv2.IMREAD_COLOR)
                     if image is None:
                         raise RuntimeError(f"Cannot read image: {source}")
                     cv2.imwrite(str(out_path), render(image))
-                    result = ("Wrote {name}", {"name": out_path.name})
+                    result = (N_("Wrote {name}"), {"name": out_path.name})
             except (RuntimeError, OSError, cv2.error) as error:  # shown in the window, not lost with the thread
-                result = ("Conversion failed: {error}", {"error": str(error)})
+                result = (N_("Conversion failed: {error}"), {"error": str(error)})
             finally:
                 # The result first, so that conversion_status() never falls silent in between.
                 self._conversion_result = result

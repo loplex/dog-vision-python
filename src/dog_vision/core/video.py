@@ -17,6 +17,7 @@ import cv2
 import numpy as np
 
 from dog_vision.core import i18n
+from dog_vision.core.i18n import N_
 
 # ffmpeg encoders, best first: H.265 before H.264, software before hardware, as the
 # software encoders give the better picture for the size. None stands for a hardware
@@ -213,9 +214,9 @@ def convert_video(path: Path, out_path: Path, render, progress=None, cancelled=N
 def writer_description(writer: VideoWriter, language: str = "en") -> str:
     """How a video was written, e.g. "H.265 (libx265), with the original sound"."""
     template = {
-        "kept": "{format} ({encoder}), with the original sound",
-        "none": "{format} ({encoder}); the original has no sound",
-        "lost": "{format} ({encoder}), without sound: ffmpeg is not installed",
-        "unknown": "{format} ({encoder})",
+        "kept": N_("{format} ({encoder}), with the original sound"),
+        "none": N_("{format} ({encoder}); the original has no sound"),
+        "lost": N_("{format} ({encoder}), without sound: ffmpeg is not installed"),
+        "unknown": N_("{format} ({encoder})"),
     }[writer.sound]
     return i18n.translate(template, language).format(format=writer.format_name, encoder=writer.encoder)

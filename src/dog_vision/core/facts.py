@@ -3,6 +3,7 @@
 import re
 
 from dog_vision.core import i18n
+from dog_vision.core.i18n import N_
 from dog_vision.core.model import Params, neutral_point, rnl_gains
 from dog_vision.core.species import (
     ACUITY,
@@ -13,7 +14,7 @@ from dog_vision.core.species import (
     SPECIES,
 )
 
-COLOUR_VISION = {1: "monochromat", 2: "dichromat", 3: "trichromat"}
+COLOUR_VISION = {1: N_("monochromat"), 2: N_("dichromat"), 3: N_("trichromat")}
 
 
 def percent(low: float, high: float, language: str = "en") -> str:

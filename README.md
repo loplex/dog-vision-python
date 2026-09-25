@@ -136,6 +136,9 @@ Ctrl+C or a right click copies them.
 The window speaks English and Czech.
 A language is one entry in `LANGUAGES` in [`i18n.py`](src/dog_vision/core/i18n.py): its name, its decimal point, and
 its translations, each keyed by the English text as in gettext.
+A text reaches a translation through `_()`, or a helper such as `text()` for a widget's label; one
+kept in a variable to be translated where it is shown is marked with `N_()`, as in gettext, so that
+`check_docs.py` finds it.
 
 The first of these that is set decides, and a language the window does not speak gives English:
 
@@ -414,8 +417,9 @@ That catches differences in colour and in sharpness alike.
   shares and sources, the relative links and anchors, the neutral points quoted above, and that the
   test chart and the apple figures are what the code renders
   ([`render_species_grid.py`](tools/render_species_grid.py), [`render_photo_figures.py`](tools/render_photo_figures.py)).
-  It also checks that each translation in [`i18n.py`](src/dog_vision/core/i18n.py) names every species and
-  describes every label, and that every English text it translates still occurs in the code.
+  It also checks that each translation in [`i18n.py`](src/dog_vision/core/i18n.py) names every species,
+  describes every label and translates every text the code hands over to be translated, and that
+  every English text it translates still occurs in the code.
 - `uv run lint-imports` checks that the code keeps its layers: `dog_vision.core` imports neither the
   window nor the command line, and `dog_vision.gui` does not import the command line.
 - The apple photo is [*Shiny red apples*](https://commons.wikimedia.org/wiki/File:Shiny_red_apples.jpg)
