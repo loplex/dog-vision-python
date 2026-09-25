@@ -33,7 +33,7 @@ def slug(heading: str) -> str:
 
 
 def without_code_blocks(text: str) -> str:
-    return re.sub(r"```.*?```", "", text, flags=re.S)
+    return re.sub(r"```.*?```", "", text, flags=re.DOTALL)
 
 
 def expected_row(name: str) -> list[str]:
@@ -75,7 +75,7 @@ def acuity_cells(name: str) -> list[str]:
 
 
 def check_acuity_table(readme: str) -> list[str]:
-    start = re.search(r"^\| `--species` +\| Side by side", readme, flags=re.M).start()
+    start = re.search(r"^\| `--species` +\| Side by side", readme, flags=re.MULTILINE).start()
     table = readme[start:].split("\n\n")[0].splitlines()[2:]
     rows = {}
     for line in table:
@@ -93,7 +93,7 @@ def check_acuity_table(readme: str) -> list[str]:
 
 def check_links(path: Path) -> list[str]:
     text = without_code_blocks(path.read_text())
-    anchors = {slug(h) for h in re.findall(r"^#+ (.+)$", text, flags=re.M)}
+    anchors = {slug(h) for h in re.findall(r"^#+ (.+)$", text, flags=re.MULTILINE)}
     errors = []
     for target in re.findall(r"\]\(([^)\s]+)\)", text):
         if re.match(r"[a-z]+://", target):

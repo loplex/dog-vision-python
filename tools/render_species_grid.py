@@ -37,7 +37,10 @@ def label(text: str, height: int, width: int = LABEL_WIDTH) -> np.ndarray:
 
 def render() -> np.ndarray:
     source = test_image()
-    gap = lambda: np.full((source.shape[0], 8, 3), 255, np.uint8)  # noqa: E731
+
+    def gap() -> np.ndarray:
+        return np.full((source.shape[0], 8, 3), 255, np.uint8)
+
     rows = [np.hstack([label("", 24), label("fixed", 24, STRIP_WIDTH), gap()[:24], label("rnl", 24, STRIP_WIDTH)])]
     rows.append(np.hstack([label("original", source.shape[0]), source, gap(), source]))
     for name in species.SPECIES:
