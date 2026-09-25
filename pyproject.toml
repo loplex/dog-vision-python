@@ -1,7 +1,9 @@
 [project]
 name = "dog-vision"
 version = "0.1.0"
-description = "Simulate how dogs and other mammals see colour, on a live camera, a photo or a video"
+description = """\
+    Colour vision and visual acuity of dogs, other mammals and colour-blind humans, \
+    simulated on a live camera, a photo or a video"""
 readme = "README.md"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
