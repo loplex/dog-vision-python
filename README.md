@@ -19,7 +19,7 @@ the seal](docs/apples-species.png)
 - [Map of differences](#map-of-differences) — where two views differ noticeably,
   and by what measure.
 - [What it cannot show](#what-it-cannot-show) — limits, grouped by whether they can be lifted.
-- [Checking it](#checking-it) — `--info`, `check_docs.py`, `lint-imports` and `pytest`.
+- [Checking it](#checking-it) — `--info`, `check_docs.py`, `ruff`, `lint-imports` and `pytest`.
 - [References](#references)
 - [Credits](#credits)
 - [License](#license)
@@ -467,6 +467,7 @@ That catches differences in colour and in sharpness alike.
   in [`i18n.py`](src/dog_vision/core/i18n.py) names every species, describes every label and
   translates every text the code hands over to be translated, and that every English text it
   translates still occurs in the code.
+- `uv run ruff check` lints the code, and keeps its lines within 120 characters.
 - `uv run lint-imports` checks that the code keeps its layers: `dog_vision.core` imports neither the
   window nor the command line, and `dog_vision.gui` does not import the command line.
 - `uv run pytest` runs the tests in [`tests/`](tests): the model's invariants (grey stays grey, with

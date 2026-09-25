@@ -28,6 +28,7 @@ dev = [
     "import-linter>=2.15",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
+    "ruff>=0.16.9",
 ]
 
 [tool.importlinter]
@@ -46,3 +47,9 @@ patch = ["subprocess"]  # measure python -m dog_vision run by a test too
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+extend-select = ["E501"]  # the line length is not checked by default
