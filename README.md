@@ -16,7 +16,7 @@ the seal](docs/apples-species.png)
 - [Acuity](#acuity) — blurring to what each species resolves, and when that shows.
 - [Map of differences](#map-of-differences) — where two views differ noticeably, and by what measure.
 - [What it cannot show](#what-it-cannot-show) — limits, grouped by whether they can be lifted.
-- [Checking it](#checking-it) — `--info`, `check_docs.py` and `lint-imports`.
+- [Checking it](#checking-it) — `--info`, `check_docs.py`, `lint-imports` and `pytest`.
 - [References](#references)
 
 ## Running it
@@ -435,6 +435,10 @@ That catches differences in colour and in sharpness alike.
   every English text it translates still occurs in the code.
 - `uv run lint-imports` checks that the code keeps its layers: `dog_vision.core` imports neither the
   window nor the command line, and `dog_vision.gui` does not import the command line.
+- `uv run pytest` runs the tests in [`tests/`](tests). They cover recording: that each frame is
+  repeated for as long as it was shown, that a frame of another size or one the encoder cannot
+  keep up with is dropped, that a failed recording says why and removes its unfinished file, and that
+  `LiveSession` records the view as rendered.
 - The apple photo is [*Shiny red apples*](https://commons.wikimedia.org/wiki/File:Shiny_red_apples.jpg)
   by Leon Brooks, released into the public domain.
 
