@@ -45,7 +45,9 @@ def apply_bgr(frame_bgr: np.ndarray, t_rgb: np.ndarray, blur: tuple[float, float
         linear = cv2.GaussianBlur(linear, (0, 0), sigmaX=blur[0], sigmaY=blur[1])
     out = linear @ t_bgr.T
     np.clip(out, 0.0, 1.0, out=out)
-    return _ENCODE[(out * (_ENCODE_STEPS - 1)).astype(np.int32)]
+    # Rounded, not truncated: truncating darkens values near black, where the curve is steepest,
+    # so that even the identity would not give the image back.
+    return _ENCODE[(out * (_ENCODE_STEPS - 1) + 0.5).astype(np.int32)]
 
 
 HUMAN_JND_DELTA_E = 2.3  # CIELAB Delta E*ab of one just-noticeable difference (Mahy et al. 1994)

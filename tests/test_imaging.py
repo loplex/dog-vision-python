@@ -26,10 +26,19 @@ def test_apply_bgr_reads_the_matrix_in_rgb_order():
     assert out[0, 0].tolist() == [255, 0, 0]  # BGR blue
 
 
+def test_the_identity_gives_every_value_back():
+    values = np.arange(256, dtype=np.uint8).reshape(16, 16, 1).repeat(3, axis=2)
+    np.testing.assert_array_equal(apply_bgr(values, np.eye(3)), values)
+
+
+def test_strength_zero_shows_the_original(photo):
+    np.testing.assert_array_equal(simulate(photo, Params("dog", strength=0.0)), photo)
+
+
 def test_apply_bgr_works_in_linear_light():
     half = np.eye(3) * 0.5
     out = apply_bgr(solid(255, 1, 1), half)
-    assert (abs(out.astype(int) - 188) <= 1).all()  # sRGB of linear 0.5 is 187.5, not 128
+    assert out[0, 0].tolist() == [188] * 3  # sRGB of linear 0.5 is 187.5, not 128
 
 
 def test_apply_bgr_clips_to_the_displayable_range():
