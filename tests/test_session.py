@@ -8,9 +8,11 @@ import pytest
 from conftest import read_frames, write_video
 
 from dog_vision.core import session as session_module
+from dog_vision.core import settings as settings_store
 from dog_vision.core.imaging import compose
 from dog_vision.core.model import Params
 from dog_vision.core.session import PREVIEW_LONGEST_SIDE, LiveSession
+from dog_vision.core.settings import Settings
 from dog_vision.core.video import RECORDING_FPS
 
 
@@ -255,3 +257,87 @@ def test_settings_changed_after_a_conversion_started_are_not_in_it(session, monk
     changed.set()
     wait_for(lambda: not session.converting)
     np.testing.assert_array_equal(rendered[0], compose(frame, Params("dog"), True, None, False)[0])
+
+
+def test_the_output_folder_is_the_working_directory_by_default(session, tmp_path):
+    assert session.output_dir == tmp_path
+
+
+def test_snapshots_and_recordings_go_to_the_output_folder(tmp_path, clock, fake_writer):
+    photo = tmp_path / "photo.png"
+    cv2.imwrite(str(photo), np.zeros((8, 8, 3), np.uint8))
+    live = LiveSession(0, Params(), path=photo, output_dir=tmp_path / "out" / "new")
+    live.render()
+    name = live.save_snapshot()
+    assert (tmp_path / "out" / "new" / name).exists()  # the missing folder is made
+    live.start_recording()
+    live.stop_recording()
+    live.close()
+    assert fake_writer.made[0].path.parent == tmp_path / "out" / "new"
+
+
+def test_a_recording_path_does_not_depend_on_the_working_directory_later(session, tmp_path, monkeypatch, clock, fake_writer):
+    session.render()
+    session.start_recording()
+    monkeypatch.chdir(tmp_path.parent)  # before the recorder opens its file
+    session.stop_recording()
+    session.close()
+    assert fake_writer.made[0].path.parent == tmp_path
+
+
+def test_a_chosen_folder_is_remembered(session, tmp_path, settings_file):
+    session._output_dir_override = tmp_path / "from-the-command-line"
+    assert session.set_output_dir(tmp_path / "chosen") is None
+    assert session.output_dir == tmp_path / "chosen"  # the command line's folder no longer counts
+    assert settings_store.load(settings_file).output_dir == tmp_path / "chosen"
+
+
+def test_a_saved_folder_is_used_unless_the_command_line_gives_another(tmp_path):
+    photo = tmp_path / "photo.png"
+    cv2.imwrite(str(photo), np.zeros((8, 8, 3), np.uint8))
+    saved = Settings(tmp_path / "saved")
+    assert LiveSession(0, Params(), path=photo, saved=saved).output_dir == tmp_path / "saved"
+    assert LiveSession(0, Params(), path=photo, saved=saved, output_dir=tmp_path / "now").output_dir == tmp_path / "now"
+
+
+def test_a_folder_that_cannot_be_saved_says_why(session, tmp_path, monkeypatch):
+    def fail(settings):
+        raise OSError("read-only file system")
+
+    monkeypatch.setattr(settings_store, "save", fail)
+    assert session.set_output_dir(tmp_path / "x") == "Cannot save the settings: read-only file system"
+    assert session.output_dir == tmp_path / "x"  # still used for this run
+
+
+def test_a_snapshot_that_cannot_be_written_is_an_error(session, tmp_path):
+    (tmp_path / "a-file").write_text("")
+    session.set_output_dir(tmp_path / "a-file")  # a file, not a folder
+    session.render()
+    with pytest.raises(OSError, match="Cannot write"):
+        session.save_snapshot()
+
+
+def test_a_conversion_goes_next_to_the_original_by_default(session, tmp_path):
+    session.set_output_dir(tmp_path / "out")
+    session.convert_source()
+    wait_for(lambda: not session.converting)
+    assert (tmp_path / "photo.dog.png").exists()
+
+
+def test_a_conversion_can_go_to_the_output_folder(session, tmp_path, settings_file):
+    session.set_output_dir(tmp_path / "out")
+    assert session.set_convert_to_output_dir(True) is None
+    assert settings_store.load(settings_file).convert_to_output_dir
+    session.convert_source()  # the missing folder is made
+    wait_for(lambda: not session.converting)
+    assert (tmp_path / "out" / "photo.dog.png").exists()
+    assert not (tmp_path / "photo.dog.png").exists()
+
+
+def test_a_converted_photo_that_cannot_be_written_is_a_failure(session, tmp_path):
+    (tmp_path / "a-file").write_text("")
+    session.set_output_dir(tmp_path / "a-file" / "below")  # cannot be made: a file is in the way
+    session.set_convert_to_output_dir(True)
+    session.convert_source()
+    wait_for(lambda: not session.converting)
+    assert session.conversion_status().startswith("Conversion failed: ")

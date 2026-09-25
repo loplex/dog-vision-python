@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 import pytest
 
+from dog_vision.core import settings as settings_store
 from dog_vision.core import video
 
 
@@ -53,6 +54,14 @@ class FakeWriter:
 def english(monkeypatch):
     """Every test in English, whatever language the machine running it asks for."""
     monkeypatch.setenv("LANGUAGE", "en")
+
+
+@pytest.fixture(autouse=True)
+def settings_file(tmp_path, monkeypatch):
+    """Where the settings are saved during a test, never the user's own file."""
+    path = tmp_path / "config" / "settings.json"
+    monkeypatch.setattr(settings_store, "config_path", lambda: path)
+    return path
 
 
 @pytest.fixture

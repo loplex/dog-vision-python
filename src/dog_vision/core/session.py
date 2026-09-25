@@ -10,10 +10,12 @@ import cv2
 import numpy as np
 
 from dog_vision.core import i18n
+from dog_vision.core import settings as settings_store
 from dog_vision.core.facts import percent, species_facts, species_label
 from dog_vision.core.i18n import N_
 from dog_vision.core.imaging import compose
 from dog_vision.core.model import CHROMA_SCALES, Params
+from dog_vision.core.settings import Settings
 from dog_vision.core.species import SPECIES
 from dog_vision.core.video import (
     Recorder,
@@ -43,11 +45,20 @@ class LiveSession:
     frame; a video plays at its own rate and starts over at its end. A GUI changes
     params, side_by_side, compare and difference directly, and calls reset(),
     save_snapshot(), start_recording(), stop_recording(), open_file(), open_camera(),
-    convert_source() and close(). While recording, a video's size cannot change, so a GUI
+    convert_source(), set_output_dir(), set_convert_to_output_dir() and close(). While recording, a video's size cannot change, so a GUI
     leaves side_by_side, difference and the source as they are.
     """
 
-    def __init__(self, camera_index: int, initial: Params, compare: str | None = None, path: Path | None = None) -> None:
+    def __init__(
+        self,
+        camera_index: int,
+        initial: Params,
+        compare: str | None = None,
+        path: Path | None = None,
+        saved: Settings | None = None,
+        output_dir: Path | None = None,
+    ) -> None:
+        """saved is what the window remembers, and output_dir overrides its folder until another is chosen."""
         self.species_names = list(SPECIES)
         self.chroma_scales = CHROMA_SCALES
         self.languages = {code: language.name for code, language in i18n.LANGUAGES.items()}  # in itself
@@ -59,6 +70,8 @@ class LiveSession:
         self.compare = compare  # the species on the left instead of the original, if any
         self.difference = False  # add a map of where left and right differ noticeably
         self.camera_index = camera_index
+        self.settings = saved or Settings()
+        self._output_dir_override = output_dir
         self.source: Path | None = None  # the open file, or None for the camera
         self.source_is_video = False
         self.error: str | None = None  # set when the camera stops delivering frames
@@ -196,28 +209,63 @@ class LiveSession:
         """What the simulation knows about a species, the current one by default, as (label, value, description) rows."""
         return species_facts(species or self.params.species, self.language)
 
-    def _output_name(self, extension: str) -> str:
-        """A file name for the view as shown now, e.g. dog-cat-20260925-105600.png."""
+    @property
+    def output_dir(self) -> Path:
+        """Where snapshots and recordings go, and conversions if convert_to_output_dir says so."""
+        return (self._output_dir_override or self.settings.output_dir or Path.cwd()).expanduser().absolute()
+
+    def set_output_dir(self, path: Path) -> str | None:
+        """Save snapshots and recordings in path from now on, and remember it; the error, if it cannot be."""
+        self._output_dir_override = None
+        self.settings.output_dir = Path(path)
+        return self._save_settings()
+
+    def set_convert_to_output_dir(self, convert_to_output_dir: bool) -> str | None:
+        """Put converted files in output_dir or next to their originals, and remember it; the error, if it cannot be."""
+        self.settings.convert_to_output_dir = convert_to_output_dir
+        return self._save_settings()
+
+    def _save_settings(self) -> str | None:
+        try:
+            settings_store.save(self.settings)
+        except OSError as error:
+            return self.translate("Cannot save the settings: {error}").format(error=error)
+        return None
+
+    def _output_path(self, extension: str) -> Path:
+        """A path in output_dir for the view as shown now, e.g. dog-cat-20260925-105600.png.
+
+        The folder is made if it is missing; if it cannot be, writing the file says so.
+        """
         shown = self.params.species if self.compare is None or not self.side_by_side else f"{self.compare}-vs-{self.params.species}"
-        return f"dog-{shown}-{time.strftime('%Y%m%d-%H%M%S')}.{extension}"
+        folder = self.output_dir
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
+        return folder / f"dog-{shown}-{time.strftime('%Y%m%d-%H%M%S')}.{extension}"
 
     def save_snapshot(self) -> str | None:
-        """Write the last rendered view to the working directory and return the file name."""
+        """Write the last rendered view to output_dir and return the file name; None before the first frame.
+
+        Raises OSError if the file cannot be written.
+        """
         if self._last_images is None:
             return None
-        name = self._output_name("png")
-        cv2.imwrite(name, self._last_images)
-        return name
+        path = self._output_path("png")
+        if not cv2.imwrite(str(path), self._last_images):
+            raise OSError(f"Cannot write {path}")
+        return path.name
 
     @property
     def recording(self) -> bool:
         return self._recorder is not None
 
     def start_recording(self) -> bool:
-        """Record the view as shown to dog-<species>-<time>.mp4 in the working directory; False if recording."""
+        """Record the view as shown to dog-<species>-<time>.mp4 in output_dir; False if recording."""
         if self._recorder is not None:
             return False
-        self._recorder = Recorder(Path(self._output_name("mp4")))
+        self._recorder = Recorder(self._output_path("mp4"))
         if self._last_images is not None:  # a still photo renders no new frame to start with
             self._recorder.add(self._last_images)
         return True
@@ -250,14 +298,17 @@ class LiveSession:
     def convert_source(self) -> bool:
         """Convert the open file at full size with the current settings, in the background.
 
-        The result goes next to the file, as <name>.dog.png or <name>.dog.mp4, and shows the
-        view as the window does. False if the camera is shown or a conversion is running.
+        The result is <name>.dog.png or <name>.dog.mp4, next to the file or in output_dir as
+        settings.convert_to_output_dir says, and shows the view as the window does. False if
+        the camera is shown or a conversion is running.
         """
         if self.source is None or self.converting:
             return False
         source, is_video = self.source, self.source_is_video
         params, side_by_side, compare, difference = dataclasses.replace(self.params), self.side_by_side, self.compare, self.difference
         out_path = converted_path(source, is_video)
+        if self.settings.convert_to_output_dir:
+            out_path = self.output_dir / out_path.name
 
         def render(frame: np.ndarray) -> np.ndarray:
             return compose(frame, params, side_by_side, compare, difference)[0]
@@ -265,6 +316,7 @@ class LiveSession:
         def convert() -> None:
             result = None  # stays None when cancelled
             try:
+                out_path.parent.mkdir(parents=True, exist_ok=True)
                 if is_video:
                     writer = convert_video(source, out_path, render, self._set_progress, self._cancel_conversion.is_set)
                     if writer is not None:
@@ -273,7 +325,8 @@ class LiveSession:
                     image = cv2.imread(str(source), cv2.IMREAD_COLOR)
                     if image is None:
                         raise RuntimeError(f"Cannot read image: {source}")
-                    cv2.imwrite(str(out_path), render(image))
+                    if not cv2.imwrite(str(out_path), render(image)):
+                        raise OSError(f"Cannot write {out_path}")
                     result = (N_("Wrote {name}"), {"name": out_path.name})
             except (RuntimeError, OSError, cv2.error) as error:  # shown in the window, not lost with the thread
                 result = (N_("Conversion failed: {error}"), {"error": str(error)})

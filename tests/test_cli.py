@@ -6,6 +6,8 @@ import pytest
 from conftest import read_frames, write_video
 
 from dog_vision import cli
+from dog_vision.core import settings as settings_store
+from dog_vision.core.settings import Settings
 from dog_vision.gui import tk as tk_gui
 
 
@@ -113,3 +115,43 @@ def test_a_camera_that_stops_ends_with_its_error(monkeypatch, photo):
     monkeypatch.setattr(tk_gui, "run", fail)
     with pytest.raises(SystemExit, match="Camera stopped delivering frames"):
         run(monkeypatch, "--window", photo)
+
+
+def test_output_dir_takes_a_converted_file(monkeypatch, capsys, tmp_path, photo):
+    run(monkeypatch, photo, "--output-dir", tmp_path / "out")
+    assert (tmp_path / "out" / "photo.dog.png").exists()
+    assert not photo.with_suffix(".dog.png").exists()
+
+
+def test_a_converted_file_follows_the_saved_settings(monkeypatch, tmp_path, photo):
+    settings_store.save(Settings(tmp_path / "saved", convert_to_output_dir=True))
+    run(monkeypatch, photo)
+    assert (tmp_path / "saved" / "photo.dog.png").exists()
+
+
+def test_a_saved_folder_alone_leaves_a_converted_file_next_to_its_original(monkeypatch, tmp_path, photo):
+    settings_store.save(Settings(tmp_path / "saved"))
+    run(monkeypatch, photo)
+    assert photo.with_suffix(".dog.png").exists()
+
+
+def test_a_photo_that_cannot_be_written_is_an_error(monkeypatch, tmp_path, photo):
+    (tmp_path / "a-file").write_text("")
+    with pytest.raises(SystemExit, match="Cannot make .*a-file"):
+        run(monkeypatch, photo, "--output-dir", tmp_path / "a-file")
+
+
+def test_output_dir_and_the_saved_settings_reach_the_window(monkeypatch, tmp_path, photo):
+    shown = []
+    monkeypatch.setattr(tk_gui, "run", shown.append)
+    settings_store.save(Settings(tmp_path / "saved", convert_to_output_dir=True))
+    run(monkeypatch, "--window", photo, "--output-dir", tmp_path / "now")
+    (session,) = shown
+    assert session.output_dir == tmp_path / "now"
+    assert session.settings == Settings(tmp_path / "saved", convert_to_output_dir=True)
+
+
+def test_a_converted_photo_that_cannot_be_written_is_an_error(monkeypatch, photo):
+    photo.with_suffix(".dog.png").mkdir()  # a folder where the file would go
+    with pytest.raises(SystemExit, match="Cannot write .*photo.dog.png"):
+        run(monkeypatch, photo)

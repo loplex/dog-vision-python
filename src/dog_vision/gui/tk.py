@@ -619,8 +619,25 @@ def run(session: LiveSession) -> None:
         show_params()
 
     def save() -> None:
-        name = session.save_snapshot()
+        try:
+            name = session.save_snapshot()
+        except OSError as error:
+            status.configure(text=_("Cannot save snapshot: {error}").format(error=error))
+            return
         status.configure(text=_("Saved {name}").format(name=name) if name else _("No frame yet"))
+
+    def choose_output_dir() -> None:
+        path = filedialog.askdirectory(
+            parent=root, title=_("Folder for snapshots and recordings"), initialdir=str(session.output_dir)
+        )
+        if path:
+            error = session.set_output_dir(Path(path))
+            status.configure(text=error or _("Snapshots and recordings go to {folder}").format(folder=session.output_dir))
+
+    convert_to_output_dir = tk.BooleanVar(value=session.settings.convert_to_output_dir)  # the File menu's check
+
+    def set_convert_to_output_dir() -> None:
+        status.configure(text=session.set_convert_to_output_dir(convert_to_output_dir.get()) or "")
 
     recording = tk.BooleanVar(value=False)  # the File menu's check
 
@@ -709,6 +726,15 @@ def run(session: LiveSession) -> None:
     file_menu.add_separator()
     entry(file_menu, "command", "Save snapshot", command=save, accelerator="s")
     entry(file_menu, "checkbutton", "Record video", variable=recording, command=toggle_recording, accelerator="v")
+    file_menu.add_separator()
+    entry(file_menu, "command", "Output folder…", command=choose_output_dir)
+    entry(
+        file_menu,
+        "checkbutton",
+        "Converted files into the output folder",
+        variable=convert_to_output_dir,
+        command=set_convert_to_output_dir,
+    )
     file_menu.add_separator()
     entry(file_menu, "command", "Quit", command=root.destroy, accelerator="q")
 

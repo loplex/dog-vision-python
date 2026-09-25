@@ -37,6 +37,7 @@ uv run dog-vision --species cow --compare horse --difference   # and where they 
 uv run dog-vision photo.jpg           # writes photo.dog.png next to it
 uv run dog-vision clip.mp4            # writes clip.dog.mp4 next to it
 uv run dog-vision --window clip.mp4   # shows it in the window instead
+uv run dog-vision --output-dir out photo.jpg    # writes out/photo.dog.png
 uv run dog-vision --adaptation 1 sunset.jpg
 ```
 
@@ -58,6 +59,8 @@ a link to it in a directory on `PATH`, such as `~/.local/bin`, makes it a comman
   [Video is written with the best method the system has](#video-is-written-with-the-best-method-the-system-has).
 - `--window` shows the photo or video in the window instead of converting it, and the window can
   convert it from there.
+- `--output-dir` is where a file converted on the command line goes, and where the window saves
+  snapshots and recordings for this run; see [Where files are saved](#where-files-are-saved).
 - `uv run dog-vision --help` lists every option.
 
 ### Video is written with the best method the system has
@@ -117,8 +120,10 @@ the facts about the dog and the simulation's controls on the right](docs/window.
 | *File › Open file…*, `o`        | a photo or a video instead of the camera            |
 | *File › Camera*                 | back to the camera                                  |
 | *File › Convert file*           | writes the open file as shown, at full size         |
-| *File › Save snapshot*, `s`     | saves `dog-<species>-<time>.png` in the current dir |
+| *File › Save snapshot*, `s`     | saves `dog-<species>-<time>.png`                    |
 | *File › Record video*, `v`      | records `dog-<species>-<time>.mp4`; again stops it  |
+| *File › Output folder…*         | where snapshots and recordings go, remembered       |
+| *File › Converted files into …* | puts converted files there too, remembered          |
 | *File › Quit*, `q`, Esc         | quits                                               |
 | *View › Side panel*, F9         | hides or shows the controls on the right            |
 | *Language* menu                 | the window's language, starting as the system's     |
@@ -140,6 +145,21 @@ Ctrl+C or a right click copies them.
 - **A recording keeps the clock's pace**: it is written at 30 frames per second, each frame repeated
   for as long as it was shown, whatever rate the camera delivers.
   It is encoded as a conversion is, on a thread of its own, and has no sound.
+
+### Where files are saved
+
+- **Snapshots and recordings go to the output folder**: the current directory until one is chosen
+  with *File › Output folder…*.
+  A folder given with `--output-dir` is used for that run only; one chosen in the window replaces it
+  and is remembered.
+- **A converted file goes next to its original**, as `<name>.dog.png` or `<name>.dog.mp4`.
+  With *File › Converted files into the output folder* checked, it goes to the output folder
+  instead, from the window and from the command line alike; `--output-dir` on the command line
+  always takes it.
+- **A folder that does not exist yet is made** when a file is saved in it.
+- **The window remembers both choices** in `settings.json`, in `$XDG_CONFIG_HOME/dog-vision`
+  (`~/.config/dog-vision` without it) on Linux, `~/Library/Application Support/dog-vision` on
+  macOS and `%APPDATA%\dog-vision` on Windows. A missing or damaged file means the defaults.
 
 ### The window starts in the system's language, looked up as gettext does
 
@@ -173,6 +193,9 @@ Everything else sits in `LiveSession` in [`session.py`](src/dog_vision/core/sess
   camera, and `source_name()` says what is shown.
 - `convert_source()` converts the open file in the background with the current settings;
   `converting` and `conversion_status()` say how it stands.
+- `output_dir` is where snapshots and recordings go; `set_output_dir()` and
+  `set_convert_to_output_dir()` change it and where converted files go, and save both to `settings`,
+  returning the error if they cannot.
 - `start_recording()` and `stop_recording()` record the view as `render()` shows it; `recording` and
   `recording_status()` say how it stands, and while `recording` is true the window leaves
   `side_by_side`, `difference` and the source alone.

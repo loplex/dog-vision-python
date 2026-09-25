@@ -15,6 +15,7 @@ import cv2
 import numpy as np
 import pytest
 
+from dog_vision.core import settings as settings_store
 from dog_vision.core.model import Params
 from dog_vision.core.session import LiveSession
 from dog_vision.gui import tk as tk_gui
@@ -122,6 +123,12 @@ def canvas_items(root: tk.Tk, kind: str) -> tuple[list[int], tk.Canvas]:
     return [
         item for item in canvas.find_all() if canvas.type(item) == kind and canvas.itemcget(item, "state") != "hidden"
     ], canvas
+
+
+def status_text(root: tk.Tk) -> str:
+    """The status bar's last label: what the last action did."""
+    bar = next(child for child in root.winfo_children() if child.grid_info().get("row") == 2)
+    return bar.pack_slaves()[-1].cget("text")
 
 
 def test_the_window_shows_the_view_with_its_captions(session, monkeypatch):
@@ -271,3 +278,43 @@ def test_the_window_closes_when_the_camera_stops(session, monkeypatch):
 
     show(session, monkeypatch, scenario)
     assert closed == [True]
+
+
+def test_the_output_folder_is_chosen_in_the_file_menu(session, monkeypatch, tmp_path, settings_file):
+    monkeypatch.setattr(tk_gui.filedialog, "askdirectory", lambda **options: str(tmp_path / "chosen"))
+
+    def scenario(root):
+        choose(root, "File", "Output folder…")
+        assert session.output_dir == tmp_path / "chosen"
+        assert status_text(root) == f"Snapshots and recordings go to {tmp_path / 'chosen'}"
+        press(root, "s")
+
+    show(session, monkeypatch, scenario)
+    assert settings_store.load(settings_file).output_dir == tmp_path / "chosen"
+    assert len(list((tmp_path / "chosen").glob("dog-dog-*.png"))) == 1
+
+
+def test_cancelling_the_folder_dialog_keeps_the_folder(session, monkeypatch, tmp_path):
+    monkeypatch.setattr(tk_gui.filedialog, "askdirectory", lambda **options: "")
+    show(session, monkeypatch, lambda root: choose(root, "File", "Output folder…"))
+    assert session.output_dir == tmp_path
+
+
+def test_converted_files_into_the_output_folder_is_a_check_in_the_file_menu(session, monkeypatch, settings_file):
+    def scenario(root):
+        choose(root, "File", "Converted files into the output folder")
+        assert session.settings.convert_to_output_dir
+
+    show(session, monkeypatch, scenario)
+    assert settings_store.load(settings_file).convert_to_output_dir
+
+
+def test_a_snapshot_that_cannot_be_saved_says_why(session, monkeypatch, tmp_path):
+    (tmp_path / "a-file").write_text("")
+    session.set_output_dir(tmp_path / "a-file")
+
+    def scenario(root):
+        press(root, "s")
+        assert status_text(root).startswith("Cannot save snapshot: Cannot write ")
+
+    show(session, monkeypatch, scenario)

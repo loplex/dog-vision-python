@@ -12,6 +12,7 @@ Usage:
     uv run dog-vision --info          # print the derived model and checks
     uv run dog-vision --species cat   # another dichromat
     uv run dog-vision --species cat --compare dog   # two species side by side
+    uv run dog-vision --output-dir ~/Pictures       # snapshots and recordings go there
 
 The live window (dog_vision.gui.tk) lists the species on the right; keys: m = toggle
 side-by-side / simulation only, d = map of differences, o = open a photo or a video,
@@ -29,6 +30,7 @@ import cv2
 import numpy as np
 
 from dog_vision.core import model
+from dog_vision.core import settings as settings_store
 from dog_vision.core.facts import species_facts
 from dog_vision.core.imaging import compose
 from dog_vision.core.model import (
@@ -80,21 +82,35 @@ def print_info(params: Params) -> None:
     print("(Viénot, Brettel & Mollon 1999).")
 
 
-def convert_file(path: Path, params: Params, compare: str | None = None, difference: bool = False) -> None:
-    """Convert a photo to <name>.dog.png, or a video to <name>.dog.mp4, next to it."""
+def convert_file(
+    path: Path, params: Params, compare: str | None = None, difference: bool = False, out_dir: Path | None = None
+) -> None:
+    """Convert a photo to <name>.dog.png, or a video to <name>.dog.mp4, in out_dir or next to it."""
     side_by_side = compare is not None or difference
+
+    def out_path_for(is_video: bool) -> Path:
+        out_path = converted_path(path, is_video)
+        if out_dir is None:
+            return out_path
+        try:
+            out_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            sys.exit(f"Cannot make {out_dir}: {error}")
+        return out_dir / out_path.name
+
     image = cv2.imread(str(path), cv2.IMREAD_COLOR)
     if image is not None:
-        out_path = converted_path(path, is_video=False)
+        out_path = out_path_for(is_video=False)
         composed, share = compose(image, params, side_by_side, compare, difference)
         if share is not None:
             print(f"{share:.0%} of pixels differ noticeably")
-        cv2.imwrite(str(out_path), composed)
+        if not cv2.imwrite(str(out_path), composed):
+            sys.exit(f"Cannot write {out_path}")
         print(f"Wrote {out_path}")
         return
     if not cv2.VideoCapture(str(path)).isOpened():
         sys.exit(f"Cannot read image or video: {path}")
-    out_path = converted_path(path, is_video=True)
+    out_path = out_path_for(is_video=True)
 
     def show_progress(share: float) -> None:
         if sys.stderr.isatty():
@@ -118,6 +134,14 @@ def main() -> None:
     parser.add_argument("--window", action="store_true", help="show the photo or video in the window instead of converting it")
     parser.add_argument("--camera", type=int, default=0, help="camera index (default 0)")
     parser.add_argument("--info", action="store_true", help="print the derived model and exit")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help="folder for the window's snapshots and recordings, for this run, and for a file"
+        " converted on the command line (default: the folder chosen in the window, else the"
+        " current directory; a converted file goes next to its original unless the window"
+        " was set to put it in that folder)",
+    )
     defaults = Params()
     parser.add_argument("--species", choices=SPECIES, default=defaults.species, help="animal to simulate (default %(default)s)")
     parser.add_argument(
@@ -148,16 +172,18 @@ def main() -> None:
     )
     args = parser.parse_args()
     params = Params(args.species, args.adaptation, args.strength, args.chroma_scale, args.acuity, args.fov)
+    saved = settings_store.load()
 
     if args.info:
         print_info(params)
     elif args.image and not args.window:
-        convert_file(args.image, params, args.compare, args.difference)
+        out_dir = args.output_dir or (saved.output_dir if saved.convert_to_output_dir else None)
+        convert_file(args.image, params, args.compare, args.difference, out_dir and out_dir.expanduser())
     else:
         # The only GUI-specific line in this module.
         from dog_vision.gui import tk as tk_gui
 
-        session = LiveSession(args.camera, params, args.compare, args.image)
+        session = LiveSession(args.camera, params, args.compare, args.image, saved, args.output_dir)
         session.difference = args.difference
         try:
             tk_gui.run(session)
