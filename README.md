@@ -18,6 +18,7 @@ the seal](docs/apples-species.png)
 - [What it cannot show](#what-it-cannot-show) — limits, grouped by whether they can be lifted.
 - [Checking it](#checking-it) — `--info`, `check_docs.py`, `lint-imports` and `pytest`.
 - [References](#references)
+- [Credits](#credits)
 
 ## Running it
 
@@ -465,8 +466,6 @@ That catches differences in colour and in sharpness alike.
   tests run on a virtual display when Xvfb is installed and on `$DISPLAY` otherwise, and are skipped
   without either; the tests of sound, colours and padding in a video need ffmpeg.
   `uv run pytest --cov` also lists the lines and branches of `dog_vision` that no test reaches.
-- The apple photo is [*Shiny red apples*](https://commons.wikimedia.org/wiki/File:Shiny_red_apples.jpg)
-  by Leon Brooks, released into the public domain.
 
 ## References
 
@@ -554,3 +553,8 @@ That catches differences in colour and in sharpness alike.
   genetic basis. *EMBO J.* 11.
 - Wässle, H. (1971), as listed in the
   [micaToolbox acuity list](http://www.empiricalimaging.com/knowledge-base/list-of-animal-spatial-acuities/).
+
+## Credits
+
+The apple photo is [*Shiny red apples*](https://commons.wikimedia.org/wiki/File:Shiny_red_apples.jpg)
+by Leon Brooks, released into the public domain.
