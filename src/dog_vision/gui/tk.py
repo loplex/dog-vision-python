@@ -27,6 +27,9 @@ FILE_EXTENSIONS = ["jpg", "jpeg", "png", "bmp", "tif", "tiff", "webp", "mp4", "m
 MIN_LIST_ROWS = 4  # rows of the species list the panel keeps before it scrolls instead
 WHEEL_LINES = 3  # lines of text the panel scrolls by per notch of the mouse wheel
 CAPTION_GAP = 12  # pixels kept free between the captions of two images
+CAPTION_PAD = 4  # pixels above and below the captions
+IMAGE_BACKGROUND = "#282828"
+CAPTION_COLOUR = "#d8d8d8"
 FACT_GAP = 8  # pixels between a species fact's name and its value
 PERCENT_SLIDERS = {"adaptation": "Adaptation to scene [%]", "strength": "Simulation strength [%]"}
 
@@ -270,31 +273,54 @@ def run(session: LiveSession) -> None:
     root.columnconfigure(0, weight=1)
     root.rowconfigure(0, weight=1)
 
-    image = tk.Label(root, background="#282828", borderwidth=0, highlightthickness=0)
-    image.grid(row=0, column=0, sticky="nsew")
-    # Each image's caption centred under it; placed, since the images' width follows the window.
-    caption_bar = ttk.Frame(root)
-    caption_bar.grid(row=1, column=0, sticky="ew")
-    captions: list[ttk.Label] = []
+    # The images with each one's caption under it, on one canvas: the dark area reaches down to the
+    # status bar, level with the panel, and the captions stay under the images wherever they are drawn.
+    image_area = tk.Canvas(root, background=IMAGE_BACKGROUND, borderwidth=0, highlightthickness=0)
+    image_area.grid(row=0, column=0, sticky="nsew")
+    photo_item = image_area.create_image(0, 0, anchor="n")
+    caption_items: list[int] = []
+    caption_line = font.nametofont("TkDefaultFont").metrics("linespace")
 
-    def show_captions(texts: list[str], shown_width: int) -> None:
-        """Put texts under the images, left to right; shown_width is the width all of them are drawn at."""
-        while len(captions) < len(texts):
-            captions.append(ttk.Label(caption_bar, anchor="center", justify="center"))
-        for unused in captions[len(texts) :]:
-            unused.place_forget()
-        part = shown_width / len(texts)
-        left = (caption_bar.winfo_width() - shown_width) / 2  # the images are centred
-        for index, (caption, text) in enumerate(zip(captions, texts)):
-            caption.configure(text=text, wraplength=max(1, round(part) - CAPTION_GAP))
-            caption.place(x=round(left + (index + 0.5) * part), y=4, anchor="n")
-        caption_bar.configure(height=max(caption.winfo_reqheight() for caption in captions[: len(texts)]) + 8)
+    def show_images(rgb: np.ndarray, texts: list[str], width: int, height: int) -> tk.PhotoImage:
+        """Draw rgb as large as fits in width x height with texts under its images, left to right.
+
+        0 draws rgb at its own size and asks for the room that takes. Returns the photo drawn.
+        """
+        while len(caption_items) < len(texts):
+            caption_items.append(
+                image_area.create_text(0, 0, anchor="n", justify="center", fill=CAPTION_COLOUR, font="TkDefaultFont")
+            )
+        for unused in caption_items[len(texts) :]:
+            image_area.itemconfigure(unused, state="hidden")
+        used = caption_items[: len(texts)]
+        # The captions wrap at the images' width, which is fitted to the room the captions leave:
+        # captions that wrap to more lines than there is room for take that room and fit the images again.
+        captions_height = caption_line
+        while True:
+            photo = to_photo(rgb, width, max(1, height - captions_height - 2 * CAPTION_PAD) if height else 0)
+            part = photo.width() / len(texts)
+            for item, text in zip(used, texts):
+                image_area.itemconfigure(item, text=text, width=max(1, round(part) - CAPTION_GAP), state="normal")
+            needed = max(image_area.bbox(item)[3] - image_area.bbox(item)[1] for item in used)
+            if needed <= captions_height:
+                break
+            captions_height = needed
+        block = photo.height() + 2 * CAPTION_PAD + captions_height
+        if not width:
+            image_area.configure(width=photo.width(), height=block)
+        left = ((width or photo.width()) - photo.width()) / 2
+        top = round(((height or block) - block) / 2)
+        image_area.itemconfigure(photo_item, image=photo)
+        image_area.coords(photo_item, round(left + photo.width() / 2), top)
+        for index, item in enumerate(used):
+            image_area.coords(item, round(left + (index + 0.5) * part), top + photo.height() + CAPTION_PAD)
+        return photo
 
     # A status bar across the bottom: what is shown, how a conversion stands, what the last action did.
     status_rule = ttk.Separator(root)
-    status_rule.grid(row=2, column=0, columnspan=2, sticky="ew")
+    status_rule.grid(row=1, column=0, columnspan=2, sticky="ew")
     status_bar = ttk.Frame(root, padding=(8, 3))
-    status_bar.grid(row=3, column=0, columnspan=2, sticky="ew")
+    status_bar.grid(row=2, column=0, columnspan=2, sticky="ew")
     source_name = ttk.Label(status_bar)
     source_name.pack(side="left")
     conversion = ttk.Label(status_bar)
@@ -304,7 +330,7 @@ def run(session: LiveSession) -> None:
 
     # The controls lie on a canvas, the Tk widget that scrolls anything, for when the open sections do not fit.
     panel = ttk.Frame(root)
-    panel.grid(row=0, column=1, rowspan=2, sticky="nsew")
+    panel.grid(row=0, column=1, sticky="nsew")
     panel.rowconfigure(0, weight=1)
     panel_canvas = tk.Canvas(
         panel, borderwidth=0, highlightthickness=0, background=ttk.Style(root).lookup("TFrame", "background")
@@ -785,7 +811,7 @@ def run(session: LiveSession) -> None:
     root.bind("<Escape>", lambda _: root.destroy())
 
     sized = False
-    shown: tuple | None = None  # the image, label size and captions last drawn, not to draw a still photo again
+    shown: tuple | None = None  # the image, canvas size and captions last drawn, not to draw a still photo again
 
     def tick() -> None:
         nonlocal sized, shown
@@ -794,16 +820,14 @@ def run(session: LiveSession) -> None:
             return
         show_source()
         rgb = session.render()
-        size = (image.winfo_width(), image.winfo_height())
+        size = (image_area.winfo_width(), image_area.winfo_height())
         # The captions count too: a change of language changes them, not the image.
         texts = session.captions()
         if rgb is not None and (shown is None or shown[0] is not rgb or shown[1:] != (size, texts)):
             shown = (rgb, size, texts)
-            # The first frame is shown at its own size: the empty label is not laid out yet.
-            photo = to_photo(rgb, image.winfo_width(), image.winfo_height()) if sized else to_photo(rgb, 0, 0)
-            image.configure(image=photo)
-            show_captions(texts, photo.width())
-            image.photo = photo  # Tk drops images that Python no longer references
+            # The first frame is shown at its own size: the empty canvas is not laid out yet.
+            photo = show_images(rgb, texts, *size) if sized else show_images(rgb, texts, 0, 0)
+            image_area.photo = photo  # Tk drops images that Python no longer references
             if not sized:
                 # The first frame sets the window to its natural size, but no larger than the
                 # screen holds; fixing that geometry stops each new image from resizing the window
