@@ -11,8 +11,8 @@ requires-python = ">=3.10"
 dependencies = ["numpy", "opencv-python-headless"]
 
 [project.urls]
-Homepage = "https://github.com/loplex/dog-vision"
-Issues = "https://github.com/loplex/dog-vision/issues"
+Homepage = "https://github.com/loplex/dog-vision-python"
+Issues = "https://github.com/loplex/dog-vision-python/issues"
 
 [project.scripts]
 dog-vision = "dog_vision.cli:main"
